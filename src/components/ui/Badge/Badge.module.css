@@ -1,0 +1,21 @@
+.badge {
+  background-color: var(--badge-color, #faad14);
+  flex: 0 0 auto;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.count {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  padding: 0 6px;
+}

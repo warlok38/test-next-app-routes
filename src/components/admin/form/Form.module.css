@@ -1,0 +1,21 @@
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.item {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.errorText {
+  color: #ff4d4f;
+  font-size: 12px;
+  line-height: 1.4;
+}

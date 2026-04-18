@@ -1,0 +1,39 @@
+.control {
+  width: 100%;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 8px 11px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.88);
+  background-color: #fff;
+}
+
+.control:focus {
+  outline: none;
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
+}
+
+.textArea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.error {
+  border-color: #ff4d4f;
+}
+
+.checkboxWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
