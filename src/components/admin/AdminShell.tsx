@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo } from 'react';
-import { Alert, Badge, Button, Empty, Layout, Tabs, message } from 'antd';
+import { Alert, Button, Empty, Layout, Tabs, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import type { FenceMonthUpdatePayload, Service, Slide } from '@/lib/api/types';
 import { FencesEditor } from '@/components/admin/FencesEditor';
 import { SlideEditor } from '@/components/admin/SlideEditor';
 import { ServicesMenu } from '@/components/admin/ServicesMenu';
 import { SlidesMenu } from '@/components/admin/SlidesMenu';
+import { Badge } from '@/components/ui/Badge';
 import { useServiceContext } from '@/lib/state/slideDraftsContext';
 import {
   useGetFencesDetailQuery,
@@ -182,7 +183,7 @@ function AdminShellInner({
             {
               key: 'slides',
               label: (
-                <Badge dot={hasPendingUpdates} size='small' offset={[6, -1]}>
+                <Badge mode='dot' size='small' show={hasPendingUpdates} offset={[-2, -4]}>
                   <span>Слайды</span>
                 </Badge>
               ),
@@ -226,7 +227,7 @@ function AdminShellInner({
             {
               key: 'fence',
               label: (
-                <Badge dot={hasPendingFences} size='small' offset={[6, -1]}>
+                <Badge mode='dot' size='small' show={hasPendingFences} offset={[-2, -4]}>
                   <span>Забор</span>
                 </Badge>
               ),

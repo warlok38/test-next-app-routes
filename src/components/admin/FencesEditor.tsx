@@ -49,6 +49,8 @@ export function FencesEditor({
 
   const updateDraft = useCallback(
     (monthId: string, checked: boolean) => {
+      let nextChangedMonths: FenceMonthUpdatePayload[] = [];
+
       setDraftMap((previous) => {
         const next = { ...previous };
         const baseValue = baseById[monthId];
@@ -59,15 +61,16 @@ export function FencesEditor({
           next[monthId] = checked;
         }
 
-        const changedMonths: FenceMonthUpdatePayload[] = Object.entries(next).map(
+        nextChangedMonths = Object.entries(next).map(
           ([id, isApproved]) => ({
             id,
             isApproved,
           }),
         );
-        onPendingMonthsChange(changedMonths);
         return next;
       });
+
+      onPendingMonthsChange(nextChangedMonths);
     },
     [baseById, onPendingMonthsChange],
   );

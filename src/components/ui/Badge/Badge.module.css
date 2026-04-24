@@ -3,10 +3,28 @@
   flex: 0 0 auto;
 }
 
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+}
+
+.marker {
+  display: inline-flex;
+  transform: translate(var(--badge-offset-x, 0), var(--badge-offset-y, 0));
+  pointer-events: none;
+}
+
 .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+}
+
+.dotSmall {
+  width: 6px;
+  height: 6px;
 }
 
 .count {
@@ -18,4 +36,13 @@
   line-height: 18px;
   text-align: center;
   padding: 0 6px;
+}
+
+.countSmall {
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 5px;
 }
