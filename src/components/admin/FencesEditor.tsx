@@ -11,9 +11,9 @@ type FencesEditorProps = {
   onPendingMonthsChange: (nextMonths: FenceMonthUpdatePayload[]) => void;
 };
 
-const toMapByName = (months: FenceMonthUpdatePayload[]): Record<string, boolean> =>
+const toMapById = (months: FenceMonthUpdatePayload[]): Record<string, boolean> =>
   months.reduce<Record<string, boolean>>((acc, month) => {
-    acc[month.name] = month.isApproved;
+    acc[month.id] = month.isApproved;
     return acc;
   }, {});
 
@@ -23,16 +23,16 @@ export function FencesEditor({
   loading = false,
   onPendingMonthsChange,
 }: FencesEditorProps) {
-  const [draftMap, setDraftMap] = useState<Record<string, boolean>>(() => toMapByName(pendingMonths));
+  const [draftMap, setDraftMap] = useState<Record<string, boolean>>(() => toMapById(pendingMonths));
 
   useEffect(() => {
-    setDraftMap(toMapByName(pendingMonths));
+    setDraftMap(toMapById(pendingMonths));
   }, [pendingMonths]);
 
-  const baseByName = useMemo(
+  const baseById = useMemo(
     () =>
       months.reduce<Record<string, boolean>>((acc, month) => {
-        acc[month.name] = month.isApproved;
+        acc[month.id] = month.isApproved;
         return acc;
       }, {}),
     [months],
@@ -42,27 +42,26 @@ export function FencesEditor({
     () =>
       months.map((month) => ({
         ...month,
-        isApproved:
-          draftMap[month.name] !== undefined ? draftMap[month.name] : month.isApproved,
+        isApproved: draftMap[month.id] !== undefined ? draftMap[month.id] : month.isApproved,
       })),
     [draftMap, months],
   );
 
   const updateDraft = useCallback(
-    (monthName: string, checked: boolean) => {
+    (monthId: string, checked: boolean) => {
       setDraftMap((previous) => {
         const next = { ...previous };
-        const baseValue = baseByName[monthName];
+        const baseValue = baseById[monthId];
 
         if (checked === baseValue) {
-          delete next[monthName];
+          delete next[monthId];
         } else {
-          next[monthName] = checked;
+          next[monthId] = checked;
         }
 
         const changedMonths: FenceMonthUpdatePayload[] = Object.entries(next).map(
-          ([name, isApproved]) => ({
-            name,
+          ([id, isApproved]) => ({
+            id,
             isApproved,
           }),
         );
@@ -70,7 +69,7 @@ export function FencesEditor({
         return next;
       });
     },
-    [baseByName, onPendingMonthsChange],
+    [baseById, onPendingMonthsChange],
   );
 
   return (
@@ -81,11 +80,11 @@ export function FencesEditor({
         ) : (
           <Flex vertical gap={12}>
             {mergedMonths.map((month) => (
-              <Flex key={month.name} align='center' justify='space-between'>
+              <Flex key={month.id} align='center' justify='space-between'>
                 <Typography.Text>{month.name}</Typography.Text>
                 <Checkbox
                   checked={month.isApproved}
-                  onChange={(event) => updateDraft(month.name, event.target.checked)}
+                  onChange={(event) => updateDraft(month.id, event.target.checked)}
                 />
               </Flex>
             ))}

@@ -15,14 +15,12 @@ const monthNames = [
   "Декабрь",
 ] as const;
 
-const buildFenceMonths = (approvedMonthNames: string[]): FenceMonth[] => {
-  const approvedLookup = new Set(approvedMonthNames);
-
-  return monthNames.map((name) => ({
+const buildFenceMonths = (serviceId: string, approvedUntilMonthId: number): FenceMonth[] =>
+  monthNames.map((name, index) => ({
+    id: `fence-${serviceId}-${index + 1}`,
     name,
-    isApproved: approvedLookup.has(name),
+    isApproved: index + 1 <= approvedUntilMonthId,
   }));
-};
 
 export const servicesMock: Service[] = [
   { id: "analytics", name: "Analytics Platform" },
@@ -464,7 +462,7 @@ export const slidesMock: Record<string, Slide[]> = {
 };
 
 export const fencesMock: Record<string, FenceMonth[]> = {
-  analytics: buildFenceMonths(["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь"]),
-  billing: buildFenceMonths(["Март", "Июнь", "Сентябрь", "Декабрь"]),
-  support: buildFenceMonths(["Февраль", "Май", "Август", "Ноябрь"]),
+  analytics: buildFenceMonths("analytics", 4),
+  billing: buildFenceMonths("billing", 4),
+  support: buildFenceMonths("support", 4),
 };

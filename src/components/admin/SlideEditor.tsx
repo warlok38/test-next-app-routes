@@ -6,7 +6,7 @@ import { Form } from '@/components/admin/form/Form';
 import { Checkbox, Input, Select } from '@/components/admin/form/controls';
 import type { Slide, SlideDraftPayload } from '@/lib/api/types';
 import type { SlideFormValues, SlideStatusOption } from '@/components/admin/slideEditorForm.types';
-import { useSlideDrafts } from '@/lib/state/slideDraftsContext';
+import { useServiceContext } from '@/lib/state/slideDraftsContext';
 
 type SlideEditorProps = {
   slide: Slide;
@@ -20,15 +20,15 @@ const statusOptions: SlideStatusOption[] = [
 
 export function SlideEditor({ slide }: SlideEditorProps) {
   const [form] = Form.useForm<SlideFormValues>();
-  const { drafts, setDraft, removeDraft } = useSlideDrafts();
+  const { slideDrafts, setSlideDraft, removeSlideDraft } = useServiceContext();
 
   const mergedSlide = useMemo(() => {
-    const draft = drafts[slide.id];
+    const draft = slideDrafts[slide.id];
     return {
       ...slide,
       ...draft,
     };
-  }, [drafts, slide]);
+  }, [slideDrafts, slide]);
 
   const initialValues = useMemo<SlideFormValues>(
     () => ({
@@ -74,21 +74,21 @@ export function SlideEditor({ slide }: SlideEditorProps) {
       }, {});
 
       if (!Object.keys(nextFields).length) {
-        removeDraft(slide.id);
+        removeSlideDraft(slide.id);
         return;
       }
 
-      setDraft(slide.id, nextFields);
+      setSlideDraft(slide.id, nextFields);
     },
-    [baseValues, removeDraft, setDraft, slide.id],
+    [baseValues, removeSlideDraft, setSlideDraft, slide.id],
   );
 
-  const draftForSlide = drafts[slide.id];
+  const draftForSlide = slideDrafts[slide.id];
   const canResetSlide = Boolean(draftForSlide && Object.keys(draftForSlide).length > 0);
 
   const handleResetSlide = useCallback(() => {
-    removeDraft(slide.id);
-  }, [removeDraft, slide.id]);
+    removeSlideDraft(slide.id);
+  }, [removeSlideDraft, slide.id]);
 
   return (
     <Card

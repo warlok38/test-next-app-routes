@@ -6,7 +6,7 @@ import { Spin, Typography } from 'antd';
 import type { Slide } from '@/lib/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
-import { useSlideDrafts } from '@/lib/state/slideDraftsContext';
+import { useServiceContext } from '@/lib/state/slideDraftsContext';
 
 type SlidesMenuProps = {
   slides: Slide[];
@@ -28,7 +28,8 @@ export function SlidesMenu({
   loading,
   onSelect,
 }: SlidesMenuProps) {
-  const { slidesMenuOpenKeys, setSlidesMenuOpenKeys, lastServiceIdForSlidesMenuRef } = useSlideDrafts();
+  const { slidesMenuOpenKeys, setSlidesMenuOpenKeys, lastServiceIdForSlidesMenuRef } =
+    useServiceContext();
   const changedSet = useMemo(() => new Set(changedSlideIds), [changedSlideIds]);
 
   const menuItems = useMemo(

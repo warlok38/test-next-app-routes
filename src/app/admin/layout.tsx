@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { SlideDraftsProvider } from "@/lib/state/slideDraftsContext";
+import { ServiceProvider } from "@/lib/state/slideDraftsContext";
 
 type AdminLayoutProps = {
   children: ReactNode;
 };
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  return <SlideDraftsProvider>{children}</SlideDraftsProvider>;
+  return <ServiceProvider>{children}</ServiceProvider>;
 }

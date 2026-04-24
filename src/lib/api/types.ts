@@ -30,11 +30,12 @@ export type SlideUpdatePayload = {
 export type SlideDraftPayload = Omit<SlideUpdatePayload, "id">;
 
 export type FenceMonth = {
+  id: string;
   name: string;
   isApproved: boolean;
 };
 
 export type FenceMonthUpdatePayload = {
-  name: string;
+  id: string;
   isApproved: boolean;
 };

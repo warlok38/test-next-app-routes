@@ -3,67 +3,80 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { ReactNode } from "react";
-import type { SlideDraftPayload } from "@/lib/api/types";
+import type { FenceMonthUpdatePayload, SlideDraftPayload } from "@/lib/api/types";
 
-type DraftMap = Record<string, SlideDraftPayload>;
+type SlideDraftMap = Record<string, SlideDraftPayload>;
 
-type SlideDraftsContextValue = {
+type ServiceContextValue = {
   activeServiceId: string | null;
-  drafts: DraftMap;
-  hasDrafts: boolean;
+  slideDrafts: SlideDraftMap;
+  fenceDrafts: FenceMonthUpdatePayload[];
+  hasSlideDrafts: boolean;
+  hasFenceDrafts: boolean;
+  hasUnsavedChanges: boolean;
   slidesMenuOpenKeys: string[];
   setSlidesMenuOpenKeys: React.Dispatch<React.SetStateAction<string[]>>;
   lastServiceIdForSlidesMenuRef: MutableRefObject<string | undefined>;
   syncActiveService: (nextServiceId: string) => void;
   confirmServiceChange: (nextServiceId: string) => boolean;
-  setDraft: (slideId: string, fields: SlideDraftPayload) => void;
-  removeDraft: (slideId: string) => void;
-  clearDrafts: () => void;
+  setSlideDraft: (slideId: string, fields: SlideDraftPayload) => void;
+  removeSlideDraft: (slideId: string) => void;
+  setFenceDrafts: (fields: FenceMonthUpdatePayload[]) => void;
+  clearFenceDrafts: () => void;
+  clearAllDrafts: () => void;
 };
 
-const SlideDraftsContext = createContext<SlideDraftsContextValue | null>(null);
+const ServiceContext = createContext<ServiceContextValue | null>(null);
 
-type SlideDraftsProviderProps = {
+type ServiceProviderProps = {
   children: ReactNode;
 };
 
-export function SlideDraftsProvider({ children }: SlideDraftsProviderProps) {
+export function ServiceProvider({ children }: ServiceProviderProps) {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<DraftMap>({});
+  const [slideDrafts, setSlideDrafts] = useState<SlideDraftMap>({});
+  const [fenceDrafts, setFenceDrafts] = useState<FenceMonthUpdatePayload[]>([]);
   const [slidesMenuOpenKeys, setSlidesMenuOpenKeys] = useState<string[]>([]);
   const lastServiceIdForSlidesMenuRef = useRef<string | undefined>(undefined);
 
-  const hasDrafts = useMemo(() => Object.keys(drafts).length > 0, [drafts]);
+  const hasSlideDrafts = useMemo(() => Object.keys(slideDrafts).length > 0, [slideDrafts]);
+  const hasFenceDrafts = fenceDrafts.length > 0;
+  const hasUnsavedChanges = hasSlideDrafts || hasFenceDrafts;
 
   const syncActiveService = useCallback((nextServiceId: string) => {
     setActiveServiceId(nextServiceId);
   }, []);
 
+  const clearAllDrafts = useCallback(() => {
+    setSlideDrafts({});
+    setFenceDrafts([]);
+  }, []);
+
   const confirmServiceChange = useCallback(
     (nextServiceId: string) => {
-      if (activeServiceId && activeServiceId !== nextServiceId && hasDrafts) {
+      if (activeServiceId && activeServiceId !== nextServiceId && hasUnsavedChanges) {
         const shouldLeave = window.confirm("Вы покидаете страницу, изменения будут отменены");
         if (!shouldLeave) {
           return false;
         }
-        setDrafts({});
+        clearAllDrafts();
       }
 
       setActiveServiceId(nextServiceId);
       return true;
     },
-    [activeServiceId, hasDrafts]
+    [activeServiceId, clearAllDrafts, hasUnsavedChanges],
   );
 
-  const setDraft = useCallback((slideId: string, fields: SlideDraftPayload) => {
-    setDrafts((previous) => ({
+  const setSlideDraft = useCallback((slideId: string, fields: SlideDraftPayload) => {
+    setSlideDrafts((previous) => ({
       ...previous,
       [slideId]: fields,
     }));
   }, []);
 
-  const removeDraft = useCallback((slideId: string) => {
-    setDrafts((previous) => {
+  const removeSlideDraft = useCallback((slideId: string) => {
+    setSlideDrafts((previous) => {
       if (!previous[slideId]) {
         return previous;
       }
@@ -74,42 +87,52 @@ export function SlideDraftsProvider({ children }: SlideDraftsProviderProps) {
     });
   }, []);
 
-  const clearDrafts = useCallback(() => setDrafts({}), []);
+  const clearFenceDrafts = useCallback(() => setFenceDrafts([]), []);
 
   const value = useMemo(
     () => ({
       activeServiceId,
-      drafts,
-      hasDrafts,
+      slideDrafts,
+      fenceDrafts,
+      hasSlideDrafts,
+      hasFenceDrafts,
+      hasUnsavedChanges,
       slidesMenuOpenKeys,
       setSlidesMenuOpenKeys,
       lastServiceIdForSlidesMenuRef,
       syncActiveService,
       confirmServiceChange,
-      setDraft,
-      removeDraft,
-      clearDrafts,
+      setSlideDraft,
+      removeSlideDraft,
+      setFenceDrafts,
+      clearFenceDrafts,
+      clearAllDrafts,
     }),
     [
       activeServiceId,
-      clearDrafts,
       confirmServiceChange,
-      drafts,
-      hasDrafts,
-      slidesMenuOpenKeys,
-      removeDraft,
-      setDraft,
+      clearAllDrafts,
+      fenceDrafts,
+      hasFenceDrafts,
+      hasSlideDrafts,
+      hasUnsavedChanges,
+      clearFenceDrafts,
+      slideDrafts,
+      setFenceDrafts,
+      setSlideDraft,
+      removeSlideDraft,
       syncActiveService,
+      slidesMenuOpenKeys,
     ]
   );
 
-  return <SlideDraftsContext.Provider value={value}>{children}</SlideDraftsContext.Provider>;
+  return <ServiceContext.Provider value={value}>{children}</ServiceContext.Provider>;
 }
 
-export function useSlideDrafts() {
-  const context = useContext(SlideDraftsContext);
+export function useServiceContext() {
+  const context = useContext(ServiceContext);
   if (!context) {
-    throw new Error("useSlideDrafts must be used inside SlideDraftsProvider");
+    throw new Error("useServiceContext must be used inside ServiceProvider");
   }
 
   return context;
