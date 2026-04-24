@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Empty, Layout, Tabs, message } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Badge, Button, Empty, Layout, Tabs, message } from 'antd';
 import { useRouter } from 'next/navigation';
-import type { Service, Slide } from '@/lib/api/types';
+import type { FenceMonthUpdatePayload, Service, Slide } from '@/lib/api/types';
+import { FencesEditor } from '@/components/admin/FencesEditor';
 import { SlideEditor } from '@/components/admin/SlideEditor';
 import { ServicesMenu } from '@/components/admin/ServicesMenu';
 import { SlidesMenu } from '@/components/admin/SlidesMenu';
 import { useSlideDrafts } from '@/lib/state/slideDraftsContext';
-import { useUpdateServiceMutation } from '@/lib/store/adminApi';
+import {
+  useGetFencesDetailQuery,
+  useUpdateFencesByServiceIdMutation,
+  useUpdateSlidesByServiceIdMutation,
+} from '@/lib/store/adminApi';
 import { findSlideById, flattenSlides } from '@/lib/slides/tree';
 
 const { Sider, Content } = Layout;
@@ -43,11 +48,22 @@ function AdminShellInner({
 }: AdminShellProps) {
   const router = useRouter();
   const { syncActiveService, confirmServiceChange, drafts, clearDrafts } = useSlideDrafts();
-  const [updateService, { isLoading: isSaving }] = useUpdateServiceMutation();
+  const [pendingFencesByService, setPendingFencesByService] = useState<
+    Record<string, FenceMonthUpdatePayload[]>
+  >({});
+  const [updateSlidesByServiceId, { isLoading: isSavingSlides }] =
+    useUpdateSlidesByServiceIdMutation();
+  const [updateFencesByServiceId, { isLoading: isSavingFences }] =
+    useUpdateFencesByServiceIdMutation();
 
   const fallbackServiceId = services[0]?.id;
   const activeServiceId = selectedServiceId ?? fallbackServiceId;
   const activeSlides = slides;
+  const fencesQuery = useGetFencesDetailQuery(
+    { serviceId: activeServiceId ?? '' },
+    { skip: !activeServiceId },
+  );
+  const activeFences = fencesQuery.data ?? [];
   const activeSlide = findSlideById(activeSlides, selectedSlideId);
   const activeSlideId = activeSlide?.id;
   const flatSlides = useMemo(() => flattenSlides(activeSlides), [activeSlides]);
@@ -76,21 +92,69 @@ function AdminShellInner({
   );
 
   const hasPendingUpdates = pendingUpdates.length > 0;
+  const pendingFences = activeServiceId ? pendingFencesByService[activeServiceId] ?? [] : [];
+  const hasPendingFences = pendingFences.length > 0;
+  const hasAnyPendingUpdates = hasPendingUpdates || hasPendingFences;
   const changedSlideIds = useMemo(() => pendingUpdates.map((item) => item.id), [pendingUpdates]);
+  const isSaving = isSavingSlides || isSavingFences;
+
+  const handlePendingFencesChange = useCallback(
+    (nextMonths: FenceMonthUpdatePayload[]) => {
+      if (!activeServiceId) {
+        return;
+      }
+
+      setPendingFencesByService((previous) => {
+        if (!nextMonths.length) {
+          if (!previous[activeServiceId]) {
+            return previous;
+          }
+
+          const next = { ...previous };
+          delete next[activeServiceId];
+          return next;
+        }
+
+        return {
+          ...previous,
+          [activeServiceId]: nextMonths,
+        };
+      });
+    },
+    [activeServiceId],
+  );
 
   const handleSaveChanges = async () => {
-    if (!activeServiceId || !hasPendingUpdates) {
+    if (!activeServiceId || !hasAnyPendingUpdates) {
       return;
     }
 
     try {
-      await updateService({
-        serviceId: activeServiceId,
-        fields: pendingUpdates,
-      }).unwrap();
+      if (hasPendingUpdates) {
+        await updateSlidesByServiceId({
+          serviceId: activeServiceId,
+          fields: pendingUpdates,
+        }).unwrap();
+      }
+
+      if (hasPendingFences) {
+        await updateFencesByServiceId({
+          serviceId: activeServiceId,
+          fields: pendingFences,
+        }).unwrap();
+      }
 
       message.success('Изменения сохранены');
       clearDrafts();
+      setPendingFencesByService((previous) => {
+        if (!previous[activeServiceId]) {
+          return previous;
+        }
+
+        const next = { ...previous };
+        delete next[activeServiceId];
+        return next;
+      });
     } catch (error) {
       const text = error instanceof Error ? error.message : 'Ошибка сохранения';
       message.error(text);
@@ -129,7 +193,7 @@ function AdminShellInner({
               type="primary"
               onClick={handleSaveChanges}
               loading={isSaving}
-              disabled={!hasPendingUpdates}
+              disabled={!hasAnyPendingUpdates}
             >
               Сохранить изменения
             </Button>
@@ -137,7 +201,11 @@ function AdminShellInner({
           items={[
             {
               key: 'slides',
-              label: 'Слайды',
+              label: (
+                <Badge dot={hasPendingUpdates} size='small' offset={[6, -1]}>
+                  <span>Слайды</span>
+                </Badge>
+              ),
               children: (
                 <Layout style={{ minHeight: 'calc(100vh - 84px)' }}>
                   <Sider
@@ -176,9 +244,22 @@ function AdminShellInner({
               ),
             },
             {
-              key: 'numbers',
-              label: 'Цифры',
-              children: <div style={{ padding: 16 }}>Цифры</div>,
+              key: 'fence',
+              label: (
+                <Badge dot={hasPendingFences} size='small' offset={[6, -1]}>
+                  <span>Забор</span>
+                </Badge>
+              ),
+              children: (
+                <div style={{ padding: 16 }}>
+                  <FencesEditor
+                    months={activeFences}
+                    pendingMonths={pendingFences}
+                    loading={fencesQuery.isFetching}
+                    onPendingMonthsChange={handlePendingFencesChange}
+                  />
+                </div>
+              ),
             },
             {
               key: 'data',

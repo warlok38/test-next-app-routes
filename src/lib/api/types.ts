@@ -28,3 +28,13 @@ export type SlideUpdatePayload = {
 };
 
 export type SlideDraftPayload = Omit<SlideUpdatePayload, "id">;
+
+export type FenceMonth = {
+  name: string;
+  isApproved: boolean;
+};
+
+export type FenceMonthUpdatePayload = {
+  name: string;
+  isApproved: boolean;
+};

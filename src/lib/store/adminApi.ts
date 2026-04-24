@@ -1,11 +1,23 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { Service, Slide, SlideUpdatePayload } from "@/lib/api/types";
-import { getServices, getServicesDetail, updateService } from "@/lib/api/services";
+import type {
+  FenceMonth,
+  FenceMonthUpdatePayload,
+  Service,
+  Slide,
+  SlideUpdatePayload,
+} from "@/lib/api/types";
+import {
+  getFencesDetail,
+  getServices,
+  getServicesDetail,
+  updateFencesByServiceId,
+  updateSlidesByServiceId,
+} from "@/lib/api/services";
 
 export const adminApi = createApi({
   reducerPath: "adminApi",
   baseQuery: fakeBaseQuery(),
-  tagTypes: ["Services", "Slides"],
+  tagTypes: ["Services", "Slides", "Fences"],
   endpoints: (builder) => ({
     getServices: builder.query<Service[], void>({
       queryFn: async () => {
@@ -39,13 +51,29 @@ export const adminApi = createApi({
       },
       providesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
     }),
-    updateService: builder.mutation<
+    getFencesDetail: builder.query<FenceMonth[], { serviceId: string }>({
+      queryFn: async ({ serviceId }) => {
+        try {
+          const data = await getFencesDetail(serviceId);
+          return { data };
+        } catch (error) {
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error: error instanceof Error ? error.message : "getFencesDetail failed",
+            },
+          };
+        }
+      },
+      providesTags: (_result, _err, arg) => [{ type: "Fences", id: arg.serviceId }],
+    }),
+    updateSlidesByServiceId: builder.mutation<
       void,
       { serviceId: string; fields: SlideUpdatePayload[] }
     >({
       queryFn: async ({ serviceId, fields }) => {
         try {
-          await updateService({
+          await updateSlidesByServiceId({
             serviceId,
             fields,
           });
@@ -54,12 +82,36 @@ export const adminApi = createApi({
           return {
             error: {
               status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "updateService failed",
+              error:
+                error instanceof Error ? error.message : "updateSlidesByServiceId failed",
             },
           };
         }
       },
       invalidatesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
+    }),
+    updateFencesByServiceId: builder.mutation<
+      void,
+      { serviceId: string; fields: FenceMonthUpdatePayload[] }
+    >({
+      queryFn: async ({ serviceId, fields }) => {
+        try {
+          await updateFencesByServiceId({
+            serviceId,
+            fields,
+          });
+          return { data: undefined };
+        } catch (error) {
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error:
+                error instanceof Error ? error.message : "updateFencesByServiceId failed",
+            },
+          };
+        }
+      },
+      invalidatesTags: (_result, _err, arg) => [{ type: "Fences", id: arg.serviceId }],
     }),
   }),
 });
@@ -67,6 +119,8 @@ export const adminApi = createApi({
 export const {
   useGetServicesQuery,
   useGetServicesDetailQuery,
-  useUpdateServiceMutation,
+  useGetFencesDetailQuery,
+  useUpdateSlidesByServiceIdMutation,
+  useUpdateFencesByServiceIdMutation,
 } = adminApi;
 

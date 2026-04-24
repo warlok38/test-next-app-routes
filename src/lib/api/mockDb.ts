@@ -1,4 +1,28 @@
-import type { Service, Slide } from "@/lib/api/types";
+import type { FenceMonth, Service, Slide } from "@/lib/api/types";
+
+const monthNames = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+] as const;
+
+const buildFenceMonths = (approvedMonthNames: string[]): FenceMonth[] => {
+  const approvedLookup = new Set(approvedMonthNames);
+
+  return monthNames.map((name) => ({
+    name,
+    isApproved: approvedLookup.has(name),
+  }));
+};
 
 export const servicesMock: Service[] = [
   { id: "analytics", name: "Analytics Platform" },
@@ -437,4 +461,10 @@ export const slidesMock: Record<string, Slide[]> = {
       isFeatured: true,
     },
   ],
+};
+
+export const fencesMock: Record<string, FenceMonth[]> = {
+  analytics: buildFenceMonths(["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь"]),
+  billing: buildFenceMonths(["Март", "Июнь", "Сентябрь", "Декабрь"]),
+  support: buildFenceMonths(["Февраль", "Май", "Август", "Ноябрь"]),
 };
