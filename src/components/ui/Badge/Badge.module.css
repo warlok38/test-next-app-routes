@@ -4,16 +4,20 @@
 }
 
 .wrapper {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   overflow: visible;
 }
 
 .marker {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: inline-flex;
   transform: translate(var(--badge-offset-x, 0), var(--badge-offset-y, 0));
   pointer-events: none;
+  z-index: 1;
 }
 
 .dot {
