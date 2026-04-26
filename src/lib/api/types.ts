@@ -8,6 +8,7 @@ export type SlideStatus = "draft" | "review" | "published";
 export type Slide = {
   id: string;
   serviceId: string;
+  groupId?: string;
   name: string;
   description?: string;
   imageUrl?: string;
@@ -15,7 +16,29 @@ export type Slide = {
   status?: SlideStatus;
   isVisible?: boolean;
   isFeatured?: boolean;
+  isGroup?: boolean;
+  order?: number;
   children?: Slide[];
+};
+
+export type GroupCreateRequest = {
+  name: string;
+  serviceId: string;
+  order?: number;
+};
+
+export type SlideCreateRequest = {
+  id: string;
+  serviceId: string;
+  groupId?: string;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  category?: string;
+  status?: SlideStatus;
+  isVisible?: boolean;
+  isFeatured?: boolean;
+  order?: number;
 };
 
 export type SlideUpdatePayload = {

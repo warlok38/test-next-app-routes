@@ -11,7 +11,7 @@ export const SLIDES_FALLBACK: SlideMapEntry = {
 
 export const SLIDES_MAP: Record<string, SlideMapEntry> = {
   'a-1': { slide: <Slides.AnalyticsA1Slide /> },
-
+  'a-1-1': { slide: <Slides.AnalyticsA1Slide /> },
   'a-2': { slide: <Slides.AnalyticsA2Slide /> },
   'a-2-2': { slide: <Slides.AnalyticsA2_2Slide /> },
   'a-2-3': { slide: <Slides.AnalyticsA2_3Slide /> },

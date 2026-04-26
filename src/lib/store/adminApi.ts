@@ -2,11 +2,15 @@ import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   FenceMonth,
   FenceMonthUpdatePayload,
+  GroupCreateRequest,
   Service,
   Slide,
+  SlideCreateRequest,
   SlideUpdatePayload,
 } from "@/lib/api/types";
 import {
+  createGroup,
+  createSlide,
   getFencesDetail,
   getServices,
   getServicesDetail,
@@ -113,6 +117,38 @@ export const adminApi = createApi({
       },
       invalidatesTags: (_result, _err, arg) => [{ type: "Fences", id: arg.serviceId }],
     }),
+    createGroup: builder.mutation<Slide, GroupCreateRequest>({
+      queryFn: async (payload) => {
+        try {
+          const data = await createGroup(payload);
+          return { data };
+        } catch (error) {
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error: error instanceof Error ? error.message : "createGroup failed",
+            },
+          };
+        }
+      },
+      invalidatesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
+    }),
+    createSlide: builder.mutation<Slide, SlideCreateRequest>({
+      queryFn: async (payload) => {
+        try {
+          const data = await createSlide(payload);
+          return { data };
+        } catch (error) {
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error: error instanceof Error ? error.message : "createSlide failed",
+            },
+          };
+        }
+      },
+      invalidatesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
+    }),
   }),
 });
 
@@ -122,5 +158,7 @@ export const {
   useGetFencesDetailQuery,
   useUpdateSlidesByServiceIdMutation,
   useUpdateFencesByServiceIdMutation,
+  useCreateGroupMutation,
+  useCreateSlideMutation,
 } = adminApi;
 

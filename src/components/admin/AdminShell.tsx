@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { Alert, Button, Empty, Layout, Tabs, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import type { FenceMonthUpdatePayload, Service, Slide } from '@/lib/api/types';
+import { CreateEntityCard } from '@/components/admin/CreateEntityCard';
 import { FencesEditor } from '@/components/admin/FencesEditor';
 import { SlideEditor } from '@/components/admin/SlideEditor';
 import { ServicesMenu } from '@/components/admin/ServicesMenu';
@@ -24,6 +25,7 @@ type AdminShellProps = {
   slides: Slide[];
   selectedServiceId?: string;
   selectedSlideId?: string;
+  isCreatePage?: boolean;
   /** Ошибка загрузки списка сервисов — показывается в левой колонке, URL остаётся /admin */
   servicesError?: string;
   error?: string;
@@ -42,6 +44,7 @@ function AdminShellInner({
   slides,
   selectedServiceId,
   selectedSlideId,
+  isCreatePage = false,
   servicesError,
   error,
   servicesLoading,
@@ -162,7 +165,7 @@ function AdminShellInner({
             if (!confirmServiceChange(nextServiceId)) {
               return;
             }
-            router.push(`/admin/${nextServiceId}`);
+            router.push(isCreatePage ? `/admin/${nextServiceId}/create` : `/admin/${nextServiceId}`);
           }}
         />
       </Sider>
@@ -192,10 +195,10 @@ function AdminShellInner({
                   <Sider
                     theme="light"
                     style={{
-                      flex: '1 1 800px',
-                      minWidth: 300,
-                      maxWidth: 800,
-                      width: '100%',
+                      flex: '0 0 380px',
+                      minWidth: 360,
+                      maxWidth: 460,
+                      width: 380,
                     }}
                   >
                     <SlidesMenu
@@ -204,6 +207,12 @@ function AdminShellInner({
                       activeSlideId={activeSlideId}
                       changedSlideIds={changedSlideIds}
                       loading={slidesLoading}
+                      onCreate={() => {
+                        if (!activeServiceId) {
+                          return;
+                        }
+                        router.push(`/admin/${activeServiceId}/create`);
+                      }}
                       onSelect={(nextSlideId) => {
                         if (!activeServiceId) {
                           return;
@@ -215,6 +224,8 @@ function AdminShellInner({
                   <Content style={{ padding: 24, minWidth: 0 }}>
                     {error ? (
                       <Alert type="error" message={error} showIcon />
+                    ) : isCreatePage ? (
+                      <CreateEntityCard activeServiceId={activeServiceId} slides={activeSlides} />
                     ) : activeSlide ? (
                       <SlideEditor slide={activeSlide} key={activeSlide.id} />
                     ) : (

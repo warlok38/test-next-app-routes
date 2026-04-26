@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { Spin, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { Button, Spin, Tooltip, Typography } from 'antd';
 import type { Slide } from '@/lib/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
@@ -16,6 +17,7 @@ type SlidesMenuProps = {
   changedSlideIds?: string[];
   loading?: boolean;
   onSelect: (slideId: string) => void;
+  onCreate?: () => void;
 };
 
 const INDICATOR_COLOR = '#faad14';
@@ -27,6 +29,7 @@ export function SlidesMenu({
   changedSlideIds = [],
   loading,
   onSelect,
+  onCreate,
 }: SlidesMenuProps) {
   const { slidesMenuOpenKeys, setSlidesMenuOpenKeys, lastServiceIdForSlidesMenuRef } =
     useServiceContext();
@@ -51,9 +54,26 @@ export function SlidesMenu({
   return (
     <Spin spinning={Boolean(loading)}>
       <div>
-        <Typography.Title level={5} style={{ margin: 16 }}>
-          Слайды
-        </Typography.Title>
+        <div
+          style={{
+            margin: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}
+        >
+          <Typography.Title level={5} style={{ margin: 0, whiteSpace: 'nowrap' }}>
+            Слайды
+          </Typography.Title>
+          <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <Tooltip title="Создать группу или слайд">
+              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={onCreate} disabled={!activeServiceId}>
+                Добавить
+              </Button>
+            </Tooltip>
+          </span>
+        </div>
         <Menu
           mode="inline"
           selectedKeys={activeSlideId ? [activeSlideId] : []}

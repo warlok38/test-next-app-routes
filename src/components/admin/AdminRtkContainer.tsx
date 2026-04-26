@@ -9,9 +9,14 @@ import { findSlideById } from "@/lib/slides/tree";
 type AdminRtkContainerProps = {
   initialServiceId?: string;
   initialSlideId?: string;
+  isCreatePage?: boolean;
 };
 
-export function AdminRtkContainer({ initialServiceId, initialSlideId }: AdminRtkContainerProps) {
+export function AdminRtkContainer({
+  initialServiceId,
+  initialSlideId,
+  isCreatePage = false,
+}: AdminRtkContainerProps) {
   const router = useRouter();
   const servicesQuery = useGetServicesQuery();
   const services = servicesQuery.data || [];
@@ -53,14 +58,14 @@ export function AdminRtkContainer({ initialServiceId, initialSlideId }: AdminRtk
         : undefined;
 
   const slideNotFoundError =
-    initialSlideId && slides.length > 0 && !findSlideById(slides, initialSlideId)
+    !isCreatePage && initialSlideId && slides.length > 0 && !findSlideById(slides, initialSlideId)
       ? `Слайд с id "${initialSlideId}" не найден`
       : undefined;
 
   const detailError = slidesError ?? slideNotFoundError;
 
   const selectedSlideId =
-    initialSlideId && findSlideById(slides, initialSlideId) ? initialSlideId : undefined;
+    !isCreatePage && initialSlideId && findSlideById(slides, initialSlideId) ? initialSlideId : undefined;
 
   return (
     <AdminShell
@@ -72,6 +77,7 @@ export function AdminRtkContainer({ initialServiceId, initialSlideId }: AdminRtk
       error={detailError}
       servicesLoading={servicesQuery.isFetching}
       slidesLoading={slidesQuery.isFetching}
+      isCreatePage={isCreatePage}
     />
   );
 }
