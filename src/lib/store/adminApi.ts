@@ -2,7 +2,10 @@ import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   FenceMonth,
   FenceMonthUpdatePayload,
+  GroupListItem,
   GroupCreateRequest,
+  GroupUpdateQuery,
+  GroupUpdateRequest,
   Service,
   Slide,
   SlideCreateRequest,
@@ -12,8 +15,10 @@ import {
   createGroup,
   createSlide,
   getFencesDetail,
+  getGroups,
   getServices,
   getServicesDetail,
+  updateGroup,
   updateFencesByServiceId,
   updateSlidesByServiceId,
 } from "@/lib/api/services";
@@ -21,7 +26,7 @@ import {
 export const adminApi = createApi({
   reducerPath: "adminApi",
   baseQuery: fakeBaseQuery(),
-  tagTypes: ["Services", "Slides", "Fences"],
+  tagTypes: ["Services", "Slides", "Fences", "Groups"],
   endpoints: (builder) => ({
     getServices: builder.query<Service[], void>({
       queryFn: async () => {
@@ -71,6 +76,22 @@ export const adminApi = createApi({
       },
       providesTags: (_result, _err, arg) => [{ type: "Fences", id: arg.serviceId }],
     }),
+    getGroups: builder.query<GroupListItem[], void>({
+      queryFn: async () => {
+        try {
+          const data = await getGroups();
+          return { data };
+        } catch (error) {
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error: error instanceof Error ? error.message : "getGroups failed",
+            },
+          };
+        }
+      },
+      providesTags: ["Groups"],
+    }),
     updateSlidesByServiceId: builder.mutation<
       void,
       { serviceId: string; fields: SlideUpdatePayload[] }
@@ -117,7 +138,7 @@ export const adminApi = createApi({
       },
       invalidatesTags: (_result, _err, arg) => [{ type: "Fences", id: arg.serviceId }],
     }),
-    createGroup: builder.mutation<Slide, GroupCreateRequest>({
+    createGroup: builder.mutation<GroupListItem, GroupCreateRequest>({
       queryFn: async (payload) => {
         try {
           const data = await createGroup(payload);
@@ -131,7 +152,23 @@ export const adminApi = createApi({
           };
         }
       },
-      invalidatesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
+      invalidatesTags: ["Groups"],
+    }),
+    updateGroup: builder.mutation<GroupListItem, { body: GroupUpdateRequest; query: GroupUpdateQuery }>({
+      queryFn: async ({ body, query }) => {
+        try {
+          const data = await updateGroup({ body, query });
+          return { data };
+        } catch (error) {
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error: error instanceof Error ? error.message : "updateGroup failed",
+            },
+          };
+        }
+      },
+      invalidatesTags: ["Groups"],
     }),
     createSlide: builder.mutation<Slide, SlideCreateRequest>({
       queryFn: async (payload) => {
@@ -156,9 +193,11 @@ export const {
   useGetServicesQuery,
   useGetServicesDetailQuery,
   useGetFencesDetailQuery,
+  useGetGroupsQuery,
   useUpdateSlidesByServiceIdMutation,
   useUpdateFencesByServiceIdMutation,
   useCreateGroupMutation,
+  useUpdateGroupMutation,
   useCreateSlideMutation,
 } = adminApi;
 

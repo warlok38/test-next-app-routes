@@ -1,8 +1,11 @@
-import { fencesMock, servicesMock, slidesMock } from "@/lib/api/mockDb";
+import { fencesMock, groupsMock, normalizeGroupsOrder, servicesMock, slidesMock } from "@/lib/api/mockDb";
 import type {
   FenceMonth,
   FenceMonthUpdatePayload,
+  GroupListItem,
   GroupCreateRequest,
+  GroupUpdateQuery,
+  GroupUpdateRequest,
   Service,
   Slide,
   SlideCreateRequest,
@@ -45,6 +48,15 @@ function clampOrder(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function cloneGroups(items: GroupListItem[]): GroupListItem[] {
+  return items.map((item) => ({ ...item }));
+}
+
+function normalizeGlobalGroups() {
+  const normalized = normalizeGroupsOrder(groupsMock);
+  groupsMock.splice(0, groupsMock.length, ...normalized);
+}
+
 function hasSlideWithId(items: Slide[], slideId: string): boolean {
   return items.some((item) => item.id === slideId || (item.children ? hasSlideWithId(item.children, slideId) : false));
 }
@@ -85,14 +97,36 @@ function normalizeTreeOrder(items: Slide[]) {
   });
 }
 
-function getTargetLevel(serviceSlides: Slide[], groupId?: string): { level: Slide[]; levelKey: string } {
+function getTargetLevel(
+  serviceSlides: Slide[],
+  serviceId: string,
+  groupId?: string,
+): { level: Slide[]; levelKey: string } {
   if (!groupId) {
     return { level: serviceSlides, levelKey: ROOT_LEVEL_KEY };
   }
 
-  const parentGroup = findSlideByGroupId(serviceSlides, groupId);
+  let parentGroup = findSlideByGroupId(serviceSlides, groupId);
   if (!parentGroup) {
-    throw new Error(`Group with id "${groupId}" not found`);
+    const group = groupsMock.find((item) => item.id === groupId);
+    if (!group) {
+      throw new Error(`Group with id "${groupId}" not found`);
+    }
+
+    parentGroup = {
+      id: `${GROUP_ID_PREFIX}-${group.id.slice(0, 8)}`,
+      serviceId,
+      groupId: group.id,
+      isGroup: true,
+      name: group.name,
+      order: serviceSlides.length + 1,
+      status: "draft",
+      isVisible: true,
+      isFeatured: false,
+      children: [],
+    };
+    serviceSlides.push(parentGroup);
+    normalizeLevelOrder(serviceSlides);
   }
 
   if (!parentGroup.children) {
@@ -149,6 +183,12 @@ export async function getFencesDetail(serviceId: string): Promise<FenceMonth[]> 
   }
 
   return fences.map((item) => ({ ...item }));
+}
+
+export async function getGroups(): Promise<GroupListItem[]> {
+  await sleep(700);
+  normalizeGlobalGroups();
+  return cloneGroups(groupsMock);
 }
 
 export async function updateSlidesByServiceId(params: {
@@ -229,41 +269,59 @@ export async function updateFencesByServiceId(params: {
   });
 }
 
-export async function createGroup(payload: GroupCreateRequest): Promise<Slide> {
+export async function createGroup(payload: GroupCreateRequest): Promise<GroupListItem> {
   await sleep(450);
 
-  const serviceSlides = slidesMock[payload.serviceId];
-  if (!serviceSlides) {
-    throw new Error(`Service with id "${payload.serviceId}" not found`);
-  }
-
-  normalizeTreeOrder(serviceSlides);
+  normalizeGlobalGroups();
   const groupId = createUuid();
-  const targetOrder = clampOrder(payload.order ?? serviceSlides.length + 1, 1, serviceSlides.length + 1);
-  const groupSlide: Slide = {
-    id: `${GROUP_ID_PREFIX}-${groupId.slice(0, 8)}`,
-    serviceId: payload.serviceId,
-    groupId,
-    isGroup: true,
+  const targetOrder = clampOrder(payload.order, 1, groupsMock.length + 1);
+  const group: GroupListItem = {
+    id: groupId,
     name: payload.name,
     order: targetOrder,
-    status: "draft",
-    isVisible: true,
-    isFeatured: false,
-    children: [],
   };
 
-  serviceSlides.splice(targetOrder - 1, 0, groupSlide);
-  normalizeLevelOrder(serviceSlides);
+  groupsMock.splice(targetOrder - 1, 0, group);
+  normalizeGlobalGroups();
 
   console.log("createGroup payload", {
     method: "POST",
     endpoint: "/groups",
     body: payload,
-    groupId,
+    query: {},
   });
 
-  return { ...groupSlide, children: [] };
+  return { ...group };
+}
+
+export async function updateGroup(params: {
+  body: GroupUpdateRequest;
+  query: GroupUpdateQuery;
+}): Promise<GroupListItem> {
+  await sleep(450);
+
+  normalizeGlobalGroups();
+  const { body, query } = params;
+  const index = groupsMock.findIndex((item) => item.id === query.id);
+  if (index === -1) {
+    throw new Error(`Group with id "${query.id}" not found`);
+  }
+
+  const targetOrder = clampOrder(body.order, 1, groupsMock.length);
+  const [group] = groupsMock.splice(index, 1);
+  group.name = body.name;
+  group.order = targetOrder;
+  groupsMock.splice(targetOrder - 1, 0, group);
+  normalizeGlobalGroups();
+
+  console.log("updateGroup payload", {
+    method: "PATCH",
+    endpoint: "/groups",
+    body,
+    query,
+  });
+
+  return { ...group };
 }
 
 export async function createSlide(payload: SlideCreateRequest): Promise<Slide> {
@@ -279,7 +337,7 @@ export async function createSlide(payload: SlideCreateRequest): Promise<Slide> {
     throw new Error(`Slide with id "${payload.id}" already exists`);
   }
 
-  const { level: targetLevel } = getTargetLevel(serviceSlides, payload.groupId);
+  const { level: targetLevel } = getTargetLevel(serviceSlides, payload.serviceId, payload.groupId);
   const targetOrder = clampOrder(payload.order ?? targetLevel.length + 1, 1, targetLevel.length + 1);
 
   const createdSlide: Slide = {

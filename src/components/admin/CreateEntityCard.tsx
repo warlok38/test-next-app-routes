@@ -4,10 +4,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Space, Tabs, Typography, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { SLIDES_MAP } from '@/constants/slides';
-import type { GroupCreateRequest, Slide, SlideCreateRequest, SlideStatus } from '@/lib/api/types';
+import type {
+  GroupCreateRequest,
+  GroupListItem,
+  Slide,
+  SlideCreateRequest,
+  SlideStatus,
+} from '@/lib/api/types';
 import {
   useCreateGroupMutation,
   useCreateSlideMutation,
+  useGetGroupsQuery,
+  useUpdateGroupMutation,
   useUpdateSlidesByServiceIdMutation,
 } from '@/lib/store/adminApi';
 import { flattenSlides } from '@/lib/slides/tree';
@@ -60,7 +68,9 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   const router = useRouter();
   const [createGroup, { isLoading: isCreatingGroup }] = useCreateGroupMutation();
   const [createSlide, { isLoading: isCreatingSlide }] = useCreateSlideMutation();
+  const [updateGroup] = useUpdateGroupMutation();
   const [updateSlidesByServiceId] = useUpdateSlidesByServiceIdMutation();
+  const { data: groups = [] } = useGetGroupsQuery();
   const [groupForm] = Form.useForm<CreateGroupFormValues>();
   const [slideForm] = Form.useForm<CreateSlideFormValues>();
   const [createEntityType, setCreateEntityType] = useState<CreateEntityType>('slide');
@@ -118,11 +128,20 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
     () => new Set(availableSlideIdOptions.map((option) => option.value)),
     [availableSlideIdOptions],
   );
-  const groupOptions = useMemo(() => collectGroupOptions(slides), [slides]);
+  const groupOptions = useMemo(
+    () =>
+      normalizeGroupItems(groups).map((group) => ({
+        value: group.id,
+        label: group.name,
+      })),
+    [groups],
+  );
   const groupSelectOptions = useMemo(
     () => [{ value: NO_GROUP_VALUE, label: 'Без группы (корневой слайд)' }, ...groupOptions],
     [groupOptions],
   );
+  const groupOrderMax = groups.length + 1;
+  const groupOrderLabel = `Порядок (группы: ${groups.length}; диапазон: 1..${groupOrderMax})`;
   const slideOrderMax = useMemo(
     () => getNextOrderOnLevel(slides, normalizeGroupId(createSlideState.groupId)),
     [createSlideState.groupId, slides],
@@ -172,6 +191,23 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
     });
   }, [availableSlideIdOptions, availableSlideIdSet, createEntityType, groupOptions, slideForm, slides]);
 
+  useEffect(() => {
+    if (createEntityType !== 'group') {
+      return;
+    }
+
+    setCreateGroupState((previous) => {
+      if (previous.order.trim().length > 0) {
+        return previous;
+      }
+
+      const nextOrder = String(groupOrderMax);
+      const nextState = { ...previous, order: nextOrder };
+      groupForm.setFieldsValue({ order: nextOrder });
+      return nextState;
+    });
+  }, [createEntityType, groupForm, groupOrderMax]);
+
   const handleSlideValuesChange = (
     changedValues: Partial<CreateSlideFormValues>,
     values: CreateSlideFormValues,
@@ -202,32 +238,56 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   };
 
   const handleCreateGroup = async () => {
-    if (!activeServiceId) {
-      message.error('Сервис не выбран');
-      return;
-    }
-
     const isValid = groupForm.validateFields();
     if (!isValid) {
       return;
     }
 
     const values = groupForm.getFieldsValue();
-    const parsedOrder = parseOptionalOrder(values.order);
+    const parsedOrder = parseRequiredOrder(values.order, groupOrderMax);
     if (typeof parsedOrder === 'string') {
       return;
     }
+    const targetOrder = clampOrder(parsedOrder, 1, groupOrderMax);
+    const groupsOnLevel = normalizeGroupItems(groups);
+    const shiftedGroups = groupsOnLevel
+      .map((group) => {
+        if (group.order >= targetOrder) {
+          return {
+            id: group.id,
+            name: group.name,
+            order: group.order + 1,
+          };
+        }
+
+        return null;
+      })
+      .filter((item): item is GroupListItem => item !== null);
 
     const payload: GroupCreateRequest = {
       name: values.name.trim(),
-      serviceId: activeServiceId,
-      order: parsedOrder,
+      order: targetOrder,
     };
 
     try {
-      const createdGroup = await createGroup(payload).unwrap();
+      await createGroup(payload).unwrap();
+      if (shiftedGroups.length) {
+        await Promise.all(
+          shiftedGroups.map((group) =>
+            updateGroup({
+              query: { id: group.id },
+              body: {
+                name: group.name,
+                order: group.order,
+              },
+            }).unwrap(),
+          ),
+        );
+      }
       message.success('Группа создана');
-      router.push(`/admin/${activeServiceId}/${createdGroup.id}`);
+      const resetOrder = String(groupOrderMax + 1);
+      setCreateGroupState({ name: '', order: resetOrder });
+      groupForm.setFieldsValue({ name: '', order: resetOrder });
     } catch (error) {
       const text = error instanceof Error ? error.message : 'Ошибка создания группы';
       message.error(text);
@@ -424,10 +484,13 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
                   </Form.Item>
                   <Form.Item<CreateGroupFormValues, 'order'>
                     name="order"
-                    label="Порядок (опционально)"
-                    rules={[{ validator: (value) => validateOptionalOrderField(value) }]}
+                    label={groupOrderLabel}
+                    rules={[
+                      { required: true, message: 'Введите порядок' },
+                      { validator: (value) => validateRequiredOrderField(value, groupOrderMax) },
+                    ]}
                   >
-                    <Input placeholder="Например: 10" />
+                    <Input type="number" min={1} max={groupOrderMax} step={1} placeholder="Например: 3" />
                   </Form.Item>
                 </Form>
                 <Button type="primary" onClick={handleCreateGroup} loading={isCreatingGroup}>
@@ -444,11 +507,6 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
 
 function validateRequiredOrderField(value: unknown, maxOrder: number): string | undefined {
   const result = parseRequiredOrder(String(value ?? ''), maxOrder);
-  return typeof result === 'string' ? result : undefined;
-}
-
-function validateOptionalOrderField(value: unknown): string | undefined {
-  const result = parseOptionalOrder(String(value ?? ''));
   return typeof result === 'string' ? result : undefined;
 }
 
@@ -482,6 +540,17 @@ function parseRequiredOrder(value: string, maxOrder: number): number | string {
 
 function clampOrder(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function normalizeGroupItems(items: GroupListItem[]): GroupListItem[] {
+  return [...items]
+    .sort((left, right) => {
+      if (left.order === right.order) {
+        return left.name.localeCompare(right.name, 'ru');
+      }
+      return left.order - right.order;
+    })
+    .map((item, index) => ({ ...item, order: index + 1 }));
 }
 
 function normalizeGroupId(groupId: string): string | undefined {
@@ -526,25 +595,4 @@ function getLevelSlides(items: Slide[], groupId?: string): Slide[] {
 function getNextOrderOnLevel(items: Slide[], groupId?: string): number {
   const siblings = normalizeSiblingOrders(getLevelSlides(items, groupId));
   return siblings.length + 1;
-}
-
-function collectGroupOptions(slides: Slide[], prefix = ''): GroupOption[] {
-  return slides.flatMap((slide) => {
-    const hasChildren = Boolean(slide.children?.length);
-    const groupPath = prefix ? `${prefix} / ${slide.name}` : slide.name;
-    const isGroupNode = Boolean(slide.isGroup) || hasChildren;
-    const ownOption = isGroupNode
-      ? [
-          {
-            value: slide.groupId ?? slide.id,
-            label: groupPath,
-          },
-        ]
-      : [];
-    const nestedOptions = slide.children?.length
-      ? collectGroupOptions(slide.children, groupPath)
-      : [];
-
-    return [...ownOption, ...nestedOptions];
-  });
 }

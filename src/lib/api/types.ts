@@ -21,10 +21,24 @@ export type Slide = {
   children?: Slide[];
 };
 
+export type GroupListItem = {
+  id: string;
+  name: string;
+  order: number;
+};
+
 export type GroupCreateRequest = {
   name: string;
-  serviceId: string;
-  order?: number;
+  order: number;
+};
+
+export type GroupUpdateRequest = {
+  name: string;
+  order: number;
+};
+
+export type GroupUpdateQuery = {
+  id: string;
 };
 
 export type SlideCreateRequest = {

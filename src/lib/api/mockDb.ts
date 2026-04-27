@@ -1,4 +1,4 @@
-import type { FenceMonth, Service, Slide } from "@/lib/api/types";
+import type { FenceMonth, GroupListItem, Service, Slide } from "@/lib/api/types";
 
 const monthNames = [
   "Январь",
@@ -493,3 +493,18 @@ export const fencesMock: Record<string, FenceMonth[]> = {
   billing: buildFenceMonths("billing", 4),
   support: buildFenceMonths("support", 4),
 };
+
+function compareGroups(left: GroupListItem, right: GroupListItem) {
+  if (left.order === right.order) {
+    return left.name.localeCompare(right.name, "ru");
+  }
+  return left.order - right.order;
+}
+
+export function normalizeGroupsOrder(items: GroupListItem[]): GroupListItem[] {
+  return [...items].sort(compareGroups).map((item, index) => ({ ...item, order: index + 1 }));
+}
+
+const groupSeeds: GroupListItem[] = [];
+
+export const groupsMock: GroupListItem[] = normalizeGroupsOrder(groupSeeds);
