@@ -13,7 +13,7 @@ import {
   useState,
 } from 'react';
 import cn from 'classnames';
-import styles from '@/components/admin/form/Form.module.css';
+import styles from '@/components/ui/Form/Form.module.css';
 
 export type FormValues = Record<string, unknown>;
 

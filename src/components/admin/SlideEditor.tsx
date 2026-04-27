@@ -2,8 +2,8 @@
 
 import { useCallback, useMemo } from 'react';
 import { Button, Card } from 'antd';
-import { Form } from '@/components/admin/form/Form';
-import { Checkbox, Input, Select } from '@/components/admin/form/controls';
+import { Form } from '@/components/ui/Form/Form';
+import { Checkbox, Input, Select } from '@/components/ui/Form/controls';
 import type { Slide, SlideDraftPayload } from '@/lib/api/types';
 import type { SlideFormValues, SlideStatusOption } from '@/components/admin/slideEditorForm.types';
 import { useServiceContext } from '@/lib/state/slideDraftsContext';

@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Checkbox, Input, InputNumber, Segmented, Select, Space, Typography, message } from 'antd';
+import { Button, Card, Segmented, Space, Typography, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { SLIDES_MAP } from '@/constants/slides';
 import type { GroupCreateRequest, Slide, SlideCreateRequest, SlideStatus } from '@/lib/api/types';
 import { useCreateGroupMutation, useCreateSlideMutation } from '@/lib/store/adminApi';
 import { flattenSlides } from '@/lib/slides/tree';
+import { Form } from '@/components/ui/Form/Form';
+import { Checkbox, Input, Select } from '@/components/ui/Form/controls';
 
 type CreateEntityCardProps = {
   activeServiceId?: string;
@@ -26,20 +28,20 @@ type SlideIdOption = {
   disabled?: boolean;
 };
 
-type CreateGroupFormState = {
+type CreateGroupFormValues = {
   name: string;
-  order: number | null;
+  order: string;
 };
 
-type CreateSlideFormState = {
-  id?: string;
-  groupId?: string;
+type CreateSlideFormValues = {
+  id: string;
+  groupId: string;
   name: string;
   description: string;
   status: SlideStatus;
   isVisible: boolean;
   isFeatured: boolean;
-  order: number | null;
+  order: string;
 };
 
 const STATUS_OPTIONS: Array<{ value: SlideStatus; label: string }> = [
@@ -54,18 +56,22 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   const router = useRouter();
   const [createGroup, { isLoading: isCreatingGroup }] = useCreateGroupMutation();
   const [createSlide, { isLoading: isCreatingSlide }] = useCreateSlideMutation();
+  const [groupForm] = Form.useForm<CreateGroupFormValues>();
+  const [slideForm] = Form.useForm<CreateSlideFormValues>();
   const [createEntityType, setCreateEntityType] = useState<CreateEntityType>('slide');
-  const [createGroupState, setCreateGroupState] = useState<CreateGroupFormState>({
+  const [createGroupState, setCreateGroupState] = useState<CreateGroupFormValues>({
     name: '',
-    order: null,
+    order: '',
   });
-  const [createSlideState, setCreateSlideState] = useState<CreateSlideFormState>({
+  const [createSlideState, setCreateSlideState] = useState<CreateSlideFormValues>({
+    id: '',
+    groupId: NO_GROUP_VALUE,
     name: '',
     description: '',
     status: 'draft',
     isVisible: true,
     isFeatured: false,
-    order: null,
+    order: '',
   });
 
   const isCreating = isCreatingGroup || isCreatingSlide;
@@ -86,15 +92,18 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
     [],
   );
   const slideIdOptions = useMemo<SlideIdOption[]>(
-    () =>
-      allSlideIds.map((option) => {
+    () => {
+      const options = allSlideIds.map((option) => {
         const used = Boolean(slideMap[option.value]);
         return {
           value: option.value,
           label: used ? `${option.label} (занят)` : option.label,
           disabled: used,
         };
-      }),
+      });
+
+      return options.sort((left, right) => Number(left.disabled) - Number(right.disabled));
+    },
     [allSlideIds, slideMap],
   );
   const availableSlideIdOptions = useMemo(
@@ -123,30 +132,48 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
       return;
     }
 
-    setCreateSlideState((previous) => ({
-      ...previous,
-      id:
+    setCreateSlideState((previous) => {
+      const nextId =
         previous.id && availableSlideIdSet.has(previous.id)
           ? previous.id
-          : availableSlideIdOptions[0]?.value,
-      groupId:
+          : (availableSlideIdOptions[0]?.value ?? '');
+      const nextGroupId =
         previous.groupId &&
         (previous.groupId === NO_GROUP_VALUE ||
           groupOptions.some((groupOption) => groupOption.value === previous.groupId))
           ? previous.groupId
-          : NO_GROUP_VALUE,
-    }));
-  }, [availableSlideIdOptions, availableSlideIdSet, createEntityType, groupOptions]);
+          : NO_GROUP_VALUE;
+
+      if (previous.id === nextId && previous.groupId === nextGroupId) {
+        return previous;
+      }
+
+      const nextState = {
+        ...previous,
+        id: nextId,
+        groupId: nextGroupId,
+      };
+      slideForm.setFieldsValue({ id: nextId, groupId: nextGroupId });
+      return nextState;
+    });
+  }, [availableSlideIdOptions, availableSlideIdSet, createEntityType, groupOptions, slideForm]);
 
   const handleCreateGroup = async () => {
-    if (!activeServiceId || !createGroupState.name.trim()) {
+    const values = groupForm.getFieldsValue();
+    if (!activeServiceId || !values.name.trim()) {
+      return;
+    }
+
+    const parsedOrder = parseOptionalOrder(values.order);
+    if (typeof parsedOrder === 'string') {
+      message.error(parsedOrder);
       return;
     }
 
     const payload: GroupCreateRequest = {
-      name: createGroupState.name.trim(),
+      name: values.name.trim(),
       serviceId: activeServiceId,
-      order: createGroupState.order ?? undefined,
+      order: parsedOrder,
     };
 
     try {
@@ -160,28 +187,32 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   };
 
   const handleCreateSlide = async () => {
-    if (!activeServiceId || !createSlideState.id || !createSlideState.name.trim()) {
+    const values = slideForm.getFieldsValue();
+    if (!activeServiceId || !values.id || !values.name.trim()) {
       return;
     }
 
-    if (!availableSlideIdSet.has(createSlideState.id)) {
+    if (!availableSlideIdSet.has(values.id)) {
       message.error('Выбранный id недоступен или уже используется');
       return;
     }
 
+    const parsedOrder = parseOptionalOrder(values.order);
+    if (typeof parsedOrder === 'string') {
+      message.error(parsedOrder);
+      return;
+    }
+
     const payload: SlideCreateRequest = {
-      id: createSlideState.id,
+      id: values.id,
       serviceId: activeServiceId,
-      groupId:
-        createSlideState.groupId && createSlideState.groupId !== NO_GROUP_VALUE
-          ? createSlideState.groupId
-          : undefined,
-      name: createSlideState.name.trim(),
-      description: createSlideState.description.trim() || undefined,
-      status: createSlideState.status,
-      isVisible: createSlideState.isVisible,
-      isFeatured: createSlideState.isFeatured,
-      order: createSlideState.order ?? undefined,
+      groupId: values.groupId && values.groupId !== NO_GROUP_VALUE ? values.groupId : undefined,
+      name: values.name.trim(),
+      description: values.description.trim() || undefined,
+      status: values.status,
+      isVisible: values.isVisible,
+      isFeatured: values.isFeatured,
+      order: parsedOrder,
     };
 
     try {
@@ -217,144 +248,92 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
         </div>
       </Space>
       {createEntityType === 'group' ? (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <div>
-            <label htmlFor="create-group-name">Название</label>
-            <Input
-              id="create-group-name"
-              value={createGroupState.name}
-              placeholder="Введите название группы"
-              onChange={(event) =>
-                setCreateGroupState((previous) => ({ ...previous, name: event.target.value }))
-              }
-            />
-          </div>
-          <div>
-            <label htmlFor="create-group-order">Порядок (опционально)</label>
-            <InputNumber
-              id="create-group-order"
-              value={createGroupState.order}
-              min={0}
-              style={{ width: '100%' }}
-              placeholder="Например: 10"
-              onChange={(value) =>
-                setCreateGroupState((previous) => ({ ...previous, order: value ?? null }))
-              }
-            />
-          </div>
+        <Space direction="vertical" size={12} style={{ width: '100%' }} key="group-form">
+          <Form<CreateGroupFormValues>
+            form={groupForm}
+            initialValues={createGroupState}
+            onValuesChange={(_, values) => setCreateGroupState(values)}
+          >
+            <Form.Item<CreateGroupFormValues, 'name'>
+              name="name"
+              label="Название"
+              rules={[{ required: true, message: 'Введите название группы' }]}
+            >
+              <Input placeholder="Введите название группы" />
+            </Form.Item>
+            <Form.Item<CreateGroupFormValues, 'order'>
+              name="order"
+              label="Порядок (опционально)"
+              rules={[{ validator: (value) => validateOrderField(value) }]}
+            >
+              <Input placeholder="Например: 10" />
+            </Form.Item>
+          </Form>
           <Button type="primary" onClick={handleCreateGroup} loading={isCreatingGroup} disabled={!canSubmitGroup}>
             Создать группу
           </Button>
         </Space>
       ) : (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <div>
-            <label htmlFor="create-slide-id">ID слайда (из SLIDES_MAP)</label>
-            <Select
-              id="create-slide-id"
-              value={createSlideState.id}
-              options={slideIdOptions}
-              onChange={(value) =>
-                setCreateSlideState((previous) => ({ ...previous, id: value }))
-              }
-              placeholder="Выберите id из доступных"
-              showSearch
-              optionFilterProp="label"
-            />
-            {!availableSlideIdOptions.length ? (
-              <Typography.Text type="secondary">
-                Все id из `SLIDES_MAP` уже заняты в этом сервисе. Добавьте новый ключ в карту
-                слайдов или используйте другой сервис.
-              </Typography.Text>
-            ) : null}
-          </div>
-          <div>
-            <label htmlFor="create-slide-group">Группа (опционально)</label>
-            <Select
-              id="create-slide-group"
-              value={createSlideState.groupId}
-              options={groupSelectOptions}
-              onChange={(value) =>
-                setCreateSlideState((previous) => ({ ...previous, groupId: value }))
-              }
-              placeholder="Выберите группу"
-            />
-          </div>
-          <div>
-            <label htmlFor="create-slide-name">Название</label>
-            <Input
-              id="create-slide-name"
-              value={createSlideState.name}
-              placeholder="Введите название слайда"
-              onChange={(event) =>
-                setCreateSlideState((previous) => ({ ...previous, name: event.target.value }))
-              }
-            />
-          </div>
-          <div>
-            <label htmlFor="create-slide-description">Описание</label>
-            <Input.TextArea
-              id="create-slide-description"
-              value={createSlideState.description}
-              rows={4}
-              placeholder="Введите описание"
-              onChange={(event) =>
-                setCreateSlideState((previous) => ({
-                  ...previous,
-                  description: event.target.value,
-                }))
-              }
-            />
-          </div>
-          <div>
-            <label htmlFor="create-slide-status">Статус</label>
-            <Select
-              id="create-slide-status"
-              value={createSlideState.status}
-              options={STATUS_OPTIONS}
-              onChange={(value) =>
-                setCreateSlideState((previous) => ({
-                  ...previous,
-                  status: value as SlideStatus,
-                }))
-              }
-            />
-          </div>
-          <div>
-            <label htmlFor="create-slide-order">Порядок (опционально)</label>
-            <InputNumber
-              id="create-slide-order"
-              value={createSlideState.order}
-              min={0}
-              style={{ width: '100%' }}
-              placeholder="Например: 30"
-              onChange={(value) =>
-                setCreateSlideState((previous) => ({ ...previous, order: value ?? null }))
-              }
-            />
-          </div>
-          <Checkbox
-            checked={createSlideState.isVisible}
-            onChange={(event) =>
-              setCreateSlideState((previous) => ({
-                ...previous,
-                isVisible: event.target.checked,
-              }))
-            }
+        <Space direction="vertical" size={12} style={{ width: '100%' }} key="slide-form">
+          <Form<CreateSlideFormValues>
+            form={slideForm}
+            initialValues={createSlideState}
+            onValuesChange={(_, values) => setCreateSlideState(values)}
           >
-            Виден пользователям
-          </Checkbox>
-          <Checkbox
-            checked={createSlideState.isFeatured}
-            onChange={(event) =>
-              setCreateSlideState((previous) => ({
-                ...previous,
-                isFeatured: event.target.checked,
-              }))
-            }
-          >
-            Показывать как избранный
-          </Checkbox>
+            <Form.Item<CreateSlideFormValues, 'id'>
+              name="id"
+              label="ID слайда (из SLIDES_MAP)"
+              rules={[
+                { required: true, message: 'Выберите ID слайда' },
+                {
+                  validator: (value) => {
+                    const slideId = String(value ?? '');
+                    if (!slideId) {
+                      return undefined;
+                    }
+                    return availableSlideIdSet.has(slideId) ? undefined : 'Этот ID уже используется';
+                  },
+                },
+              ]}
+            >
+              <Select options={slideIdOptions} />
+            </Form.Item>
+            <Form.Item<CreateSlideFormValues, 'groupId'> name="groupId" label="Группа (опционально)">
+              <Select options={groupSelectOptions} />
+            </Form.Item>
+            <Form.Item<CreateSlideFormValues, 'name'>
+              name="name"
+              label="Название"
+              rules={[{ required: true, message: 'Введите название слайда' }]}
+            >
+              <Input placeholder="Введите название слайда" />
+            </Form.Item>
+            <Form.Item<CreateSlideFormValues, 'description'> name="description" label="Описание">
+              <Input.TextArea placeholder="Введите описание" rows={4} />
+            </Form.Item>
+            <Form.Item<CreateSlideFormValues, 'status'> name="status" label="Статус">
+              <Select options={STATUS_OPTIONS} />
+            </Form.Item>
+            <Form.Item<CreateSlideFormValues, 'order'>
+              name="order"
+              label="Порядок (опционально)"
+              rules={[{ validator: (value) => validateOrderField(value) }]}
+            >
+              <Input placeholder="Например: 30" />
+            </Form.Item>
+            <Form.Item<CreateSlideFormValues, 'isVisible'> name="isVisible" valuePropName="checked">
+              <Checkbox>Виден пользователям</Checkbox>
+            </Form.Item>
+            <Form.Item<CreateSlideFormValues, 'isFeatured'> name="isFeatured" valuePropName="checked">
+              <Checkbox>Показывать как избранный</Checkbox>
+            </Form.Item>
+          </Form>
+          {!availableSlideIdOptions.length ? (
+            <Typography.Text type="secondary">
+              Все ID из `SLIDES_MAP` уже заняты в этом сервисе. Добавьте новый ключ в карту слайдов
+              или используйте другой сервис.
+            </Typography.Text>
+          ) : null}
           <Button
             type="primary"
             onClick={handleCreateSlide}
@@ -367,6 +346,25 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
       )}
     </Card>
   );
+}
+
+function validateOrderField(value: unknown): string | undefined {
+  const result = parseOptionalOrder(String(value ?? ''));
+  return typeof result === 'string' ? result : undefined;
+}
+
+function parseOptionalOrder(value: string): number | undefined | string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return 'Порядок должен быть целым числом 0 или больше';
+  }
+
+  return parsed;
 }
 
 function collectGroupOptions(slides: Slide[], prefix = ''): GroupOption[] {

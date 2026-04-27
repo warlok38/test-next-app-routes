@@ -1,7 +1,7 @@
 "use client";
 
 import cn from "classnames";
-import styles from "@/components/admin/form/controls.module.css";
+import styles from "@/components/ui/Form/controls.module.css";
 
 type BaseControlProps = {
   id?: string;
@@ -25,6 +25,7 @@ type TextAreaProps = BaseControlProps & {
 type SelectOption = {
   value: string;
   label: string;
+  disabled?: boolean;
 };
 
 type SelectProps = BaseControlProps & {
@@ -75,7 +76,7 @@ export function Select({ id, value, options, className, hasError, onChange }: Se
       className={cn(styles.control, className, { [styles.error]: hasError })}
     >
       {options.map((option) => (
-        <option key={option.value} value={option.value}>
+        <option key={option.value} value={option.value} disabled={option.disabled}>
           {option.label}
         </option>
       ))}
