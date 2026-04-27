@@ -119,14 +119,6 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
     () => [{ value: NO_GROUP_VALUE, label: 'Без группы (корневой слайд)' }, ...groupOptions],
     [groupOptions],
   );
-  const canSubmitGroup = Boolean(activeServiceId && createGroupState.name.trim());
-  const canSubmitSlide = Boolean(
-    activeServiceId &&
-      createSlideState.name.trim() &&
-      createSlideState.id &&
-      availableSlideIdSet.has(createSlideState.id),
-  );
-
   useEffect(() => {
     if (createEntityType !== 'slide') {
       return;
@@ -159,14 +151,19 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   }, [availableSlideIdOptions, availableSlideIdSet, createEntityType, groupOptions, slideForm]);
 
   const handleCreateGroup = async () => {
-    const values = groupForm.getFieldsValue();
-    if (!activeServiceId || !values.name.trim()) {
+    if (!activeServiceId) {
+      message.error('Сервис не выбран');
       return;
     }
 
+    const isValid = groupForm.validateFields();
+    if (!isValid) {
+      return;
+    }
+
+    const values = groupForm.getFieldsValue();
     const parsedOrder = parseOptionalOrder(values.order);
     if (typeof parsedOrder === 'string') {
-      message.error(parsedOrder);
       return;
     }
 
@@ -187,19 +184,23 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   };
 
   const handleCreateSlide = async () => {
-    const values = slideForm.getFieldsValue();
-    if (!activeServiceId || !values.id || !values.name.trim()) {
+    if (!activeServiceId) {
+      message.error('Сервис не выбран');
       return;
     }
 
+    const isValid = slideForm.validateFields();
+    if (!isValid) {
+      return;
+    }
+
+    const values = slideForm.getFieldsValue();
     if (!availableSlideIdSet.has(values.id)) {
-      message.error('Выбранный id недоступен или уже используется');
       return;
     }
 
     const parsedOrder = parseOptionalOrder(values.order);
     if (typeof parsedOrder === 'string') {
-      message.error(parsedOrder);
       return;
     }
 
@@ -269,7 +270,7 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
               <Input placeholder="Например: 10" />
             </Form.Item>
           </Form>
-          <Button type="primary" onClick={handleCreateGroup} loading={isCreatingGroup} disabled={!canSubmitGroup}>
+          <Button type="primary" onClick={handleCreateGroup} loading={isCreatingGroup}>
             Создать группу
           </Button>
         </Space>
@@ -338,7 +339,6 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
             type="primary"
             onClick={handleCreateSlide}
             loading={isCreatingSlide}
-            disabled={!canSubmitSlide || !availableSlideIdOptions.length}
           >
             Создать слайд
           </Button>

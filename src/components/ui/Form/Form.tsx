@@ -46,18 +46,26 @@ type FormContextValue<TValues extends FormValues> = {
   errors: Partial<Record<keyof TValues, string>>;
   setFieldValue: <TName extends keyof TValues>(name: TName, value: TValues[TName]) => void;
   setFieldError: <TName extends keyof TValues>(name: TName, error?: string) => void;
+  setFieldValidator: <TName extends keyof TValues>(
+    name: TName,
+    validator?: (value: TValues[TName]) => string | undefined,
+  ) => void;
 };
+
+type FieldValidator<TValues extends FormValues> = (value: unknown, values: TValues) => string | undefined;
 
 type FormBridge<TValues extends FormValues> = {
   getFieldsValue: () => TValues;
   setFieldsValue: (fields: Partial<TValues>) => void;
   resetFields: () => void;
+  validateFields: () => boolean;
 };
 
 export type FormInstance<TValues extends FormValues> = {
   getFieldsValue: () => TValues;
   setFieldsValue: (fields: Partial<TValues>) => void;
   resetFields: () => void;
+  validateFields: () => boolean;
   _setBridge: (bridge: FormBridge<TValues> | null) => void;
 };
 
@@ -82,6 +90,7 @@ function createFormInstance<TValues extends FormValues>(): FormInstance<TValues>
     resetFields: () => {
       bridge?.resetFields();
     },
+    validateFields: () => bridge?.validateFields() ?? false,
     _setBridge: (nextBridge) => {
       bridge = nextBridge;
     },
@@ -107,9 +116,29 @@ function FormRoot<TValues extends FormValues>({
   const formInstance = form ?? internalForm;
   const [values, setValues] = useState<TValues>(initialValues);
   const [errors, setErrors] = useState<Partial<Record<keyof TValues, string>>>({});
+  const validatorsRef = useRef<Partial<Record<keyof TValues, FieldValidator<TValues>>>>({});
   const initialValuesRef = useRef(initialValues);
   const valuesRef = useRef(values);
   valuesRef.current = values;
+
+  const validateAllFields = useCallback(() => {
+    const currentValues = valuesRef.current;
+    const nextErrors: Partial<Record<keyof TValues, string>> = {};
+
+    (Object.keys(validatorsRef.current) as Array<keyof TValues>).forEach((key) => {
+      const validator = validatorsRef.current[key];
+      if (!validator) {
+        return;
+      }
+      const validationError = validator(currentValues[key], currentValues);
+      if (validationError) {
+        nextErrors[key] = validationError;
+      }
+    });
+
+    setErrors(nextErrors);
+    return !Object.keys(nextErrors).length;
+  }, []);
 
   const applyPartialValues = useCallback((previous: TValues, fields: Partial<TValues>) => {
     let changed = false;
@@ -168,12 +197,13 @@ function FormRoot<TValues extends FormValues>({
         setValues(initialValuesRef.current);
         setErrors({});
       },
+      validateFields: () => validateAllFields(),
     });
 
     return () => {
       formInstance._setBridge(null);
     };
-  }, [applyPartialValues, formInstance, onValuesChange, values]);
+  }, [applyPartialValues, formInstance, onValuesChange, validateAllFields, values]);
 
   const contextValue = useMemo<FormContextValue<TValues>>(
     () => ({
@@ -204,6 +234,9 @@ function FormRoot<TValues extends FormValues>({
           };
         });
       },
+      setFieldValidator: (name, validator) => {
+        validatorsRef.current[name] = validator as FieldValidator<TValues> | undefined;
+      },
     }),
     [applyPartialValues, errors, onValuesChange, values],
   );
@@ -226,33 +259,43 @@ function FormItem<TValues extends FormValues, TName extends keyof TValues>({
   getValueFromEvent,
   children,
 }: FormItemProps<TValues, TName>) {
-  const { values, errors, setFieldError, setFieldValue } = useFormContext<TValues>();
+  const { values, errors, setFieldError, setFieldValue, setFieldValidator } = useFormContext<TValues>();
   const fieldId = String(name);
   const fieldValue = values[name];
   const fieldError = errors[name];
 
-  const validateField = (nextValue: TValues[TName]) => {
-    if (!rules?.length) {
-      return undefined;
-    }
+  const validateField = useCallback(
+    (nextValue: TValues[TName]) => {
+      if (!rules?.length) {
+        return undefined;
+      }
 
-    for (const rule of rules) {
-      if (rule.required) {
-        const isEmptyString = typeof nextValue === 'string' && !nextValue.trim();
-        const isEmptyValue = nextValue === null || nextValue === undefined;
-        if (isEmptyString || isEmptyValue) {
-          return rule.message ?? 'Field is required';
+      for (const rule of rules) {
+        if (rule.required) {
+          const isEmptyString = typeof nextValue === 'string' && !nextValue.trim();
+          const isEmptyValue = nextValue === null || nextValue === undefined;
+          if (isEmptyString || isEmptyValue) {
+            return rule.message ?? 'Field is required';
+          }
+        }
+
+        const validationError = rule.validator?.(nextValue, values);
+        if (validationError) {
+          return validationError;
         }
       }
 
-      const validationError = rule.validator?.(nextValue, values);
-      if (validationError) {
-        return validationError;
-      }
-    }
+      return undefined;
+    },
+    [rules, values],
+  );
 
-    return undefined;
-  };
+  useEffect(() => {
+    setFieldValidator(name, (value) => validateField(value as TValues[TName]));
+    return () => {
+      setFieldValidator(name, undefined);
+    };
+  }, [name, setFieldValidator, validateField]);
 
   const child = Children.only(children);
   if (!isValidElement(child)) {
