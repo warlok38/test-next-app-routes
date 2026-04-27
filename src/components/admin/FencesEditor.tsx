@@ -2,98 +2,119 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Checkbox, Empty, Flex, Spin, Typography } from 'antd';
-import type { FenceMonth, FenceMonthUpdatePayload } from '@/lib/api/types';
+import type { FencesByKey, FenceUpdatePayload } from '@/lib/api/types';
 
 type FencesEditorProps = {
-  months: FenceMonth[];
-  pendingMonths: FenceMonthUpdatePayload[];
+  fences: FencesByKey;
+  pendingFences: FenceUpdatePayload[];
   loading?: boolean;
-  onPendingMonthsChange: (nextMonths: FenceMonthUpdatePayload[]) => void;
+  onPendingFencesChange: (nextFences: FenceUpdatePayload[]) => void;
 };
 
-const toMapById = (months: FenceMonthUpdatePayload[]): Record<string, boolean> =>
-  months.reduce<Record<string, boolean>>((acc, month) => {
-    acc[month.id] = month.isApproved;
+type FenceRow = {
+  fenceKey: string;
+  id: string;
+  month: string;
+  approved: boolean;
+};
+
+const toMapById = (fences: FenceUpdatePayload[]): Record<string, boolean> =>
+  fences.reduce<Record<string, boolean>>((acc, fence) => {
+    acc[fence.id] = fence.approved;
     return acc;
   }, {});
 
 export function FencesEditor({
-  months,
-  pendingMonths,
+  fences,
+  pendingFences,
   loading = false,
-  onPendingMonthsChange,
+  onPendingFencesChange,
 }: FencesEditorProps) {
-  const [draftMap, setDraftMap] = useState<Record<string, boolean>>(() => toMapById(pendingMonths));
+  const [draftMap, setDraftMap] = useState<Record<string, boolean>>(() => toMapById(pendingFences));
 
   useEffect(() => {
-    setDraftMap(toMapById(pendingMonths));
-  }, [pendingMonths]);
+    setDraftMap(toMapById(pendingFences));
+  }, [pendingFences]);
 
   const baseById = useMemo(
     () =>
-      months.reduce<Record<string, boolean>>((acc, month) => {
-        acc[month.id] = month.isApproved;
-        return acc;
-      }, {}),
-    [months],
+      Object.values(fences).reduce<Record<string, boolean>>(
+        (acc, fenceItems) => {
+          fenceItems.forEach((fence) => {
+            acc[fence.id] = fence.approved;
+          });
+          return acc;
+        },
+        {},
+      ),
+    [fences],
   );
 
-  const mergedMonths = useMemo(
+  const rowsByKey = useMemo<Record<string, FenceRow[]>>(
     () =>
-      months.map((month) => ({
-        ...month,
-        isApproved: draftMap[month.id] !== undefined ? draftMap[month.id] : month.isApproved,
-      })),
-    [draftMap, months],
+      Object.fromEntries(
+        Object.entries(fences).map(([fenceKey, fenceItems]) => [
+          fenceKey,
+          fenceItems.map((fence) => ({
+            fenceKey,
+            id: fence.id,
+            month: fence.month,
+            approved: draftMap[fence.id] !== undefined ? draftMap[fence.id] : fence.approved,
+          })),
+        ]),
+      ),
+    [draftMap, fences],
   );
 
   const updateDraft = useCallback(
-    (monthId: string, checked: boolean) => {
-      let nextChangedMonths: FenceMonthUpdatePayload[] = [];
-
+    (fenceId: string, checked: boolean) => {
       setDraftMap((previous) => {
         const next = { ...previous };
-        const baseValue = baseById[monthId];
+        const baseValue = baseById[fenceId];
 
         if (checked === baseValue) {
-          delete next[monthId];
+          delete next[fenceId];
         } else {
-          next[monthId] = checked;
+          next[fenceId] = checked;
         }
 
-        nextChangedMonths = Object.entries(next).map(
-          ([id, isApproved]) => ({
+        const nextChangedFences = Object.entries(next).map(([id, approved]) => ({
             id,
-            isApproved,
-          }),
-        );
+            approved,
+          }));
+        onPendingFencesChange(nextChangedFences);
         return next;
       });
-
-      onPendingMonthsChange(nextChangedMonths);
     },
-    [baseById, onPendingMonthsChange],
+    [baseById, onPendingFencesChange],
   );
 
   return (
-    <Card title='Забор'>
-      <Spin spinning={loading}>
-        {!months.length ? (
-          <Empty description='Данные по забору не найдены' />
-        ) : (
-          <Flex vertical gap={12}>
-            {mergedMonths.map((month) => (
-              <Flex key={month.id} align='center' justify='space-between'>
-                <Typography.Text>{month.name}</Typography.Text>
-                <Checkbox
-                  checked={month.isApproved}
-                  onChange={(event) => updateDraft(month.id, event.target.checked)}
-                />
+    <Spin spinning={loading}>
+      <Typography.Title level={5} style={{ marginBottom: 12 }}>
+        Забор
+      </Typography.Title>
+      {!Object.keys(rowsByKey).length ? (
+        <Empty description='Данные по забору не найдены' />
+      ) : (
+        <Flex vertical gap={12}>
+          {Object.entries(rowsByKey).map(([fenceKey, rows]) => (
+            <Card key={fenceKey} size='small' title={fenceKey}>
+              <Flex vertical gap={10}>
+                {rows.map((row) => (
+                  <Flex key={row.id} align='center' justify='space-between'>
+                    <Typography.Text>{row.month}</Typography.Text>
+                    <Checkbox
+                      checked={row.approved}
+                      onChange={(event) => updateDraft(row.id, event.target.checked)}
+                    />
+                  </Flex>
+                ))}
               </Flex>
-            ))}
-          </Flex>
-        )}
-      </Spin>
-    </Card>
+            </Card>
+          ))}
+        </Flex>
+      )}
+    </Spin>
   );
 }

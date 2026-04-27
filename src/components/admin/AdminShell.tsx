@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { Alert, Button, Empty, Layout, Tabs, message } from 'antd';
 import { useRouter } from 'next/navigation';
-import type { FenceMonthUpdatePayload, Service, Slide } from '@/lib/api/types';
+import type { FenceUpdatePayload, Service, Slide } from '@/lib/api/types';
 import { CreateEntityCard } from '@/components/admin/CreateEntityCard';
 import { FencesEditor } from '@/components/admin/FencesEditor';
 import { SlideEditor } from '@/components/admin/SlideEditor';
@@ -71,7 +71,7 @@ function AdminShellInner({
     { serviceId: activeServiceId ?? '' },
     { skip: !activeServiceId },
   );
-  const activeFences = fencesQuery.data ?? [];
+  const activeFences = fencesQuery.data ?? {};
   const activeSlide = findSlideById(activeSlides, selectedSlideId);
   const activeSlideId = activeSlide?.id;
   const flatSlides = useMemo(() => flattenSlides(activeSlides), [activeSlides]);
@@ -107,12 +107,12 @@ function AdminShellInner({
   const isSaving = isSavingSlides || isSavingFences;
 
   const handlePendingFencesChange = useCallback(
-    (nextMonths: FenceMonthUpdatePayload[]) => {
+    (nextFences: FenceUpdatePayload[]) => {
       if (!activeServiceId) {
         return;
       }
 
-      setFenceDrafts(nextMonths);
+      setFenceDrafts(nextFences);
     },
     [activeServiceId, setFenceDrafts],
   );
@@ -133,7 +133,7 @@ function AdminShellInner({
       if (hasPendingFences) {
         await updateFencesByServiceId({
           serviceId: activeServiceId,
-          fields: pendingFences,
+          body: pendingFences,
         }).unwrap();
       }
 
@@ -245,10 +245,10 @@ function AdminShellInner({
               children: (
                 <div style={{ padding: 16 }}>
                   <FencesEditor
-                    months={activeFences}
-                    pendingMonths={pendingFences}
+                    fences={activeFences}
+                    pendingFences={pendingFences}
                     loading={fencesQuery.isFetching}
-                    onPendingMonthsChange={handlePendingFencesChange}
+                    onPendingFencesChange={handlePendingFencesChange}
                   />
                 </div>
               ),

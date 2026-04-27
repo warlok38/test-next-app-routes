@@ -3,14 +3,14 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { ReactNode } from "react";
-import type { FenceMonthUpdatePayload, SlideDraftPayload } from "@/lib/api/types";
+import type { FenceUpdatePayload, SlideDraftPayload } from "@/lib/api/types";
 
 type SlideDraftMap = Record<string, SlideDraftPayload>;
 
 type ServiceContextValue = {
   activeServiceId: string | null;
   slideDrafts: SlideDraftMap;
-  fenceDrafts: FenceMonthUpdatePayload[];
+  fenceDrafts: FenceUpdatePayload[];
   hasSlideDrafts: boolean;
   hasFenceDrafts: boolean;
   hasUnsavedChanges: boolean;
@@ -21,7 +21,7 @@ type ServiceContextValue = {
   confirmServiceChange: (nextServiceId: string) => boolean;
   setSlideDraft: (slideId: string, fields: SlideDraftPayload) => void;
   removeSlideDraft: (slideId: string) => void;
-  setFenceDrafts: (fields: FenceMonthUpdatePayload[]) => void;
+  setFenceDrafts: (fields: FenceUpdatePayload[]) => void;
   clearFenceDrafts: () => void;
   clearAllDrafts: () => void;
 };
@@ -35,7 +35,7 @@ type ServiceProviderProps = {
 export function ServiceProvider({ children }: ServiceProviderProps) {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
   const [slideDrafts, setSlideDrafts] = useState<SlideDraftMap>({});
-  const [fenceDrafts, setFenceDrafts] = useState<FenceMonthUpdatePayload[]>([]);
+  const [fenceDrafts, setFenceDrafts] = useState<FenceUpdatePayload[]>([]);
   const [slidesMenuOpenKeys, setSlidesMenuOpenKeys] = useState<string[]>([]);
   const lastServiceIdForSlidesMenuRef = useRef<string | undefined>(undefined);
 

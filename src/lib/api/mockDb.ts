@@ -1,4 +1,4 @@
-import type { FenceMonth, GroupListItem, Service, Slide } from "@/lib/api/types";
+import type { FenceItem, FencesByKey, GroupListItem, Service, Slide } from "@/lib/api/types";
 
 const monthNames = [
   "Январь",
@@ -15,12 +15,28 @@ const monthNames = [
   "Декабрь",
 ] as const;
 
-const buildFenceMonths = (serviceId: string, approvedUntilMonthId: number): FenceMonth[] =>
-  monthNames.map((name, index) => ({
-    id: `fence-${serviceId}-${index + 1}`,
-    name,
-    isApproved: index + 1 <= approvedUntilMonthId,
-  }));
+const getMonthName = (monthId: number) => monthNames[Math.min(Math.max(monthId, 1), monthNames.length) - 1];
+
+const buildFenceMonths = (
+  serviceId: string,
+  keySuffix: string,
+  approvedUntilMonthId: number,
+): FenceItem[] =>
+  monthNames.map((_, index) => {
+    const monthId = index + 1;
+    return {
+      id: `fence-${serviceId}-${keySuffix}-${monthId}`,
+      month: getMonthName(monthId),
+      approved: monthId <= approvedUntilMonthId,
+    };
+  });
+
+const buildFenceMap = (serviceId: string, approvedUntilMonthId: number): FencesByKey => {
+  return {
+    Сервис: buildFenceMonths(serviceId, "service", approvedUntilMonthId),
+    "ССЧ/ЯЧ": buildFenceMonths(serviceId, "ssh-yach", Math.max(approvedUntilMonthId - 1, 0)),
+  };
+};
 
 type SlideSeed = Omit<Slide, "order" | "children"> & {
   order?: number;
@@ -488,10 +504,10 @@ export const slidesMock: Record<string, Slide[]> = Object.fromEntries(
   Object.entries(slidesSeed).map(([serviceId, slides]) => [serviceId, normalizeSlidesOrder(slides)]),
 ) as Record<string, Slide[]>;
 
-export const fencesMock: Record<string, FenceMonth[]> = {
-  analytics: buildFenceMonths("analytics", 4),
-  billing: buildFenceMonths("billing", 4),
-  support: buildFenceMonths("support", 4),
+export const fencesMock: Record<string, FencesByKey> = {
+  analytics: buildFenceMap("analytics", 4),
+  billing: buildFenceMap("billing", 5),
+  support: buildFenceMap("support", 6),
 };
 
 function compareGroups(left: GroupListItem, right: GroupListItem) {

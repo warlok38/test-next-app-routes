@@ -1,7 +1,7 @@
 import { fencesMock, groupsMock, normalizeGroupsOrder, servicesMock, slidesMock } from "@/lib/api/mockDb";
 import type {
-  FenceMonth,
-  FenceMonthUpdatePayload,
+  FencesByKey,
+  FenceUpdatePayload,
   GroupListItem,
   GroupCreateRequest,
   GroupUpdateQuery,
@@ -174,7 +174,7 @@ export async function getServicesDetail(serviceId: string): Promise<Slide[]> {
   return cloneSlides(slides);
 }
 
-export async function getFencesDetail(serviceId: string): Promise<FenceMonth[]> {
+export async function getFencesDetail(serviceId: string): Promise<FencesByKey> {
   await sleep(1500);
   const fences = fencesMock[serviceId];
 
@@ -182,7 +182,9 @@ export async function getFencesDetail(serviceId: string): Promise<FenceMonth[]> 
     throw new Error(`Fences for service with id "${serviceId}" not found`);
   }
 
-  return fences.map((item) => ({ ...item }));
+  return Object.fromEntries(
+    Object.entries(fences).map(([key, items]) => [key, items.map((item) => ({ ...item }))]),
+  );
 }
 
 export async function getGroups(): Promise<GroupListItem[]> {
@@ -257,15 +259,30 @@ export async function updateSlidesByServiceId(params: {
 
 export async function updateFencesByServiceId(params: {
   serviceId: string;
-  fields: FenceMonthUpdatePayload[];
+  body: FenceUpdatePayload[];
 }): Promise<void> {
   await sleep(450);
 
-  const { serviceId, fields } = params;
+  const { serviceId, body } = params;
+  const serviceFences = fencesMock[serviceId];
+  if (!serviceFences) {
+    throw new Error(`Fences for service with id "${serviceId}" not found`);
+  }
+
+  const approvedById = new Map(body.map((item) => [item.id, item.approved]));
+  Object.values(serviceFences).forEach((fences) => {
+    fences.forEach((fence) => {
+      const nextApproved = approvedById.get(fence.id);
+      if (nextApproved !== undefined) {
+        fence.approved = nextApproved;
+      }
+    });
+  });
+
   console.log("updateFencesByServiceId payload", {
     serviceId,
     method: "PATCH",
-    fields,
+    body,
   });
 }
 

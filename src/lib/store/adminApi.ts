@@ -1,7 +1,7 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
-  FenceMonth,
-  FenceMonthUpdatePayload,
+  FencesByKey,
+  FenceUpdatePayload,
   GroupListItem,
   GroupCreateRequest,
   GroupUpdateQuery,
@@ -60,7 +60,7 @@ export const adminApi = createApi({
       },
       providesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
     }),
-    getFencesDetail: builder.query<FenceMonth[], { serviceId: string }>({
+    getFencesDetail: builder.query<FencesByKey, { serviceId: string }>({
       queryFn: async ({ serviceId }) => {
         try {
           const data = await getFencesDetail(serviceId);
@@ -117,13 +117,13 @@ export const adminApi = createApi({
     }),
     updateFencesByServiceId: builder.mutation<
       void,
-      { serviceId: string; fields: FenceMonthUpdatePayload[] }
+      { serviceId: string; body: FenceUpdatePayload[] }
     >({
-      queryFn: async ({ serviceId, fields }) => {
+      queryFn: async ({ serviceId, body }) => {
         try {
           await updateFencesByServiceId({
             serviceId,
-            fields,
+            body,
           });
           return { data: undefined };
         } catch (error) {

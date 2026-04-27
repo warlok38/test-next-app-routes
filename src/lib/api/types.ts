@@ -67,13 +67,15 @@ export type SlideUpdatePayload = {
 
 export type SlideDraftPayload = Omit<SlideUpdatePayload, "id">;
 
-export type FenceMonth = {
+export type FenceItem = {
   id: string;
-  name: string;
-  isApproved: boolean;
+  month: string;
+  approved: boolean;
 };
 
-export type FenceMonthUpdatePayload = {
+export type FencesByKey = Record<string, FenceItem[]>;
+
+export type FenceUpdatePayload = {
   id: string;
-  isApproved: boolean;
+  approved: boolean;
 };
