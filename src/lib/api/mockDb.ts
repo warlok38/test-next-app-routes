@@ -22,13 +22,36 @@ const buildFenceMonths = (serviceId: string, approvedUntilMonthId: number): Fenc
     isApproved: index + 1 <= approvedUntilMonthId,
   }));
 
+type SlideSeed = Omit<Slide, "order" | "children"> & {
+  order?: number;
+  children?: SlideSeed[];
+};
+
+const compareSlides = (left: SlideSeed, right: SlideSeed) => {
+  const leftOrder = left.order ?? Number.MAX_SAFE_INTEGER;
+  const rightOrder = right.order ?? Number.MAX_SAFE_INTEGER;
+  if (leftOrder === rightOrder) {
+    return left.name.localeCompare(right.name, "ru");
+  }
+  return leftOrder - rightOrder;
+};
+
+const normalizeSlidesOrder = (items: SlideSeed[]): Slide[] =>
+  [...items]
+    .sort(compareSlides)
+    .map((slide, index) => ({
+      ...slide,
+      order: index + 1,
+      children: slide.children?.length ? normalizeSlidesOrder(slide.children) : undefined,
+    }));
+
 export const servicesMock: Service[] = [
   { id: "analytics", name: "Analytics Platform" },
   { id: "billing", name: "Billing Service" },
   { id: "support", name: "Support Portal" },
 ];
 
-export const slidesMock: Record<string, Slide[]> = {
+const slidesSeed: Record<string, SlideSeed[]> = {
   analytics: [
     {
       id: "a-1",
@@ -460,6 +483,10 @@ export const slidesMock: Record<string, Slide[]> = {
     },
   ],
 };
+
+export const slidesMock: Record<string, Slide[]> = Object.fromEntries(
+  Object.entries(slidesSeed).map(([serviceId, slides]) => [serviceId, normalizeSlidesOrder(slides)]),
+) as Record<string, Slide[]>;
 
 export const fencesMock: Record<string, FenceMonth[]> = {
   analytics: buildFenceMonths("analytics", 4),

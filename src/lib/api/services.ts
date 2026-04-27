@@ -15,6 +15,7 @@ const sleep = (ms: number) =>
   });
 
 const GROUP_ID_PREFIX = "group";
+const ROOT_LEVEL_KEY = "__root__";
 
 const createUuid = () => {
   if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
@@ -29,6 +30,19 @@ function cloneSlides(items: Slide[]): Slide[] {
     ...item,
     children: item.children?.length ? cloneSlides(item.children) : undefined,
   }));
+}
+
+function compareSlidesByOrder(left: Slide, right: Slide): number {
+  const leftOrder = Number.isFinite(left.order) ? left.order : Number.MAX_SAFE_INTEGER;
+  const rightOrder = Number.isFinite(right.order) ? right.order : Number.MAX_SAFE_INTEGER;
+  if (leftOrder === rightOrder) {
+    return left.name.localeCompare(right.name, "ru");
+  }
+  return leftOrder - rightOrder;
+}
+
+function clampOrder(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function hasSlideWithId(items: Slide[], slideId: string): boolean {
@@ -52,14 +66,61 @@ function findSlideByGroupId(items: Slide[], groupId: string): Slide | undefined 
 }
 
 function sortByOrder(items: Slide[]) {
-  items.sort((left, right) => {
-    const leftOrder = left.order ?? Number.MAX_SAFE_INTEGER;
-    const rightOrder = right.order ?? Number.MAX_SAFE_INTEGER;
-    if (leftOrder === rightOrder) {
-      return left.name.localeCompare(right.name, "ru");
-    }
-    return leftOrder - rightOrder;
+  items.sort(compareSlidesByOrder);
+}
+
+function normalizeLevelOrder(items: Slide[]) {
+  sortByOrder(items);
+  items.forEach((item, index) => {
+    item.order = index + 1;
   });
+}
+
+function normalizeTreeOrder(items: Slide[]) {
+  normalizeLevelOrder(items);
+  items.forEach((item) => {
+    if (item.children?.length) {
+      normalizeTreeOrder(item.children);
+    }
+  });
+}
+
+function getTargetLevel(serviceSlides: Slide[], groupId?: string): { level: Slide[]; levelKey: string } {
+  if (!groupId) {
+    return { level: serviceSlides, levelKey: ROOT_LEVEL_KEY };
+  }
+
+  const parentGroup = findSlideByGroupId(serviceSlides, groupId);
+  if (!parentGroup) {
+    throw new Error(`Group with id "${groupId}" not found`);
+  }
+
+  if (!parentGroup.children) {
+    parentGroup.children = [];
+  }
+
+  return {
+    level: parentGroup.children,
+    levelKey: parentGroup.groupId ?? parentGroup.id,
+  };
+}
+
+function visitSlides(items: Slide[], visitor: (slide: Slide) => void) {
+  items.forEach((item) => {
+    visitor(item);
+    if (item.children?.length) {
+      visitSlides(item.children, visitor);
+    }
+  });
+}
+
+function findLevelByKey(items: Slide[], levelKey: string): Slide[] | undefined {
+  if (levelKey === ROOT_LEVEL_KEY) {
+    return items;
+  }
+
+  const parent = findSlideByGroupId(items, levelKey);
+  return parent?.children;
 }
 
 export async function getServices(): Promise<Service[]> {
@@ -75,6 +136,7 @@ export async function getServicesDetail(serviceId: string): Promise<Slide[]> {
     throw new Error(`Service with id "${serviceId}" not found`);
   }
 
+  normalizeTreeOrder(slides);
   return cloneSlides(slides);
 }
 
@@ -96,6 +158,56 @@ export async function updateSlidesByServiceId(params: {
   await sleep(450);
 
   const { serviceId, fields } = params;
+  const serviceSlides = slidesMock[serviceId];
+  if (!serviceSlides) {
+    throw new Error(`Service with id "${serviceId}" not found`);
+  }
+
+  normalizeTreeOrder(serviceSlides);
+  const patchesById = new Map(fields.map((item) => [item.id, item]));
+  const affectedLevelKeys = new Set<string>();
+
+  visitSlides(serviceSlides, (slide) => {
+    const patch = patchesById.get(slide.id);
+    if (!patch) {
+      return;
+    }
+
+    if (patch.name !== undefined) {
+      slide.name = patch.name;
+    }
+    if (patch.description !== undefined) {
+      slide.description = patch.description;
+    }
+    if (patch.status !== undefined) {
+      slide.status = patch.status;
+    }
+    if (patch.isVisible !== undefined) {
+      slide.isVisible = patch.isVisible;
+    }
+    if (patch.isFeatured !== undefined) {
+      slide.isFeatured = patch.isFeatured;
+    }
+    if (patch.order !== undefined) {
+      slide.order = patch.order;
+    }
+
+    affectedLevelKeys.add(slide.groupId ?? ROOT_LEVEL_KEY);
+  });
+
+  if (!affectedLevelKeys.size) {
+    return;
+  }
+
+  affectedLevelKeys.forEach((levelKey) => {
+    const level = findLevelByKey(serviceSlides, levelKey);
+    if (level) {
+      normalizeLevelOrder(level);
+    }
+  });
+
+  normalizeTreeOrder(serviceSlides);
+
   console.log("updateSlidesByServiceId payload", {
     serviceId,
     method: "PATCH",
@@ -125,22 +237,24 @@ export async function createGroup(payload: GroupCreateRequest): Promise<Slide> {
     throw new Error(`Service with id "${payload.serviceId}" not found`);
   }
 
+  normalizeTreeOrder(serviceSlides);
   const groupId = createUuid();
+  const targetOrder = clampOrder(payload.order ?? serviceSlides.length + 1, 1, serviceSlides.length + 1);
   const groupSlide: Slide = {
     id: `${GROUP_ID_PREFIX}-${groupId.slice(0, 8)}`,
     serviceId: payload.serviceId,
     groupId,
     isGroup: true,
     name: payload.name,
-    order: payload.order,
+    order: targetOrder,
     status: "draft",
     isVisible: true,
     isFeatured: false,
     children: [],
   };
 
-  serviceSlides.push(groupSlide);
-  sortByOrder(serviceSlides);
+  serviceSlides.splice(targetOrder - 1, 0, groupSlide);
+  normalizeLevelOrder(serviceSlides);
 
   console.log("createGroup payload", {
     method: "POST",
@@ -160,14 +274,13 @@ export async function createSlide(payload: SlideCreateRequest): Promise<Slide> {
     throw new Error(`Service with id "${payload.serviceId}" not found`);
   }
 
+  normalizeTreeOrder(serviceSlides);
   if (hasSlideWithId(serviceSlides, payload.id)) {
     throw new Error(`Slide with id "${payload.id}" already exists`);
   }
 
-  const parentGroup = payload.groupId ? findSlideByGroupId(serviceSlides, payload.groupId) : undefined;
-  if (payload.groupId && !parentGroup) {
-    throw new Error(`Group with id "${payload.groupId}" not found`);
-  }
+  const { level: targetLevel } = getTargetLevel(serviceSlides, payload.groupId);
+  const targetOrder = clampOrder(payload.order ?? targetLevel.length + 1, 1, targetLevel.length + 1);
 
   const createdSlide: Slide = {
     id: payload.id,
@@ -180,17 +293,12 @@ export async function createSlide(payload: SlideCreateRequest): Promise<Slide> {
     status: payload.status ?? "draft",
     isVisible: payload.isVisible ?? true,
     isFeatured: payload.isFeatured ?? false,
-    order: payload.order,
+    order: targetOrder,
   };
 
-  if (parentGroup) {
-    const nextChildren = [...(parentGroup.children ?? []), createdSlide];
-    sortByOrder(nextChildren);
-    parentGroup.children = nextChildren;
-  } else {
-    serviceSlides.push(createdSlide);
-    sortByOrder(serviceSlides);
-  }
+  targetLevel.splice(targetOrder - 1, 0, createdSlide);
+  normalizeLevelOrder(targetLevel);
+  normalizeTreeOrder(serviceSlides);
 
   console.log("createSlide payload", {
     method: "POST",

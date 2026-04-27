@@ -11,6 +11,10 @@ type BaseControlProps = {
 
 type InputProps = BaseControlProps & {
   value?: string;
+  type?: "text" | "number";
+  min?: number;
+  max?: number;
+  step?: number;
   placeholder?: string;
   onChange?: (value: string) => void;
 };
@@ -41,11 +45,25 @@ type CheckboxProps = {
   onChange?: (checked: boolean) => void;
 };
 
-function BaseInput({ id, value, placeholder, className, hasError, onChange }: InputProps) {
+function BaseInput({
+  id,
+  value,
+  type = "text",
+  min,
+  max,
+  step,
+  placeholder,
+  className,
+  hasError,
+  onChange,
+}: InputProps) {
   return (
     <input
       id={id}
-      type="text"
+      type={type}
+      min={min}
+      max={max}
+      step={step}
       value={value ?? ""}
       placeholder={placeholder}
       onChange={(event) => onChange?.(event.target.value)}

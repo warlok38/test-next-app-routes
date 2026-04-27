@@ -17,7 +17,7 @@ export type Slide = {
   isVisible?: boolean;
   isFeatured?: boolean;
   isGroup?: boolean;
-  order?: number;
+  order: number;
   children?: Slide[];
 };
 
@@ -48,6 +48,7 @@ export type SlideUpdatePayload = {
   status?: SlideStatus;
   isVisible?: boolean;
   isFeatured?: boolean;
+  order?: number;
 };
 
 export type SlideDraftPayload = Omit<SlideUpdatePayload, "id">;
