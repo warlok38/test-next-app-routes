@@ -1,5 +1,6 @@
 import { fencesMock, groupsMock, normalizeGroupsOrder, servicesMock, slidesMock } from "@/lib/api/mockDb";
 import type {
+  CommonSlide,
   FencesByKey,
   FenceUpdatePayload,
   GroupListItem,
@@ -50,6 +51,116 @@ function clampOrder(value: number, min: number, max: number): number {
 
 function cloneGroups(items: GroupListItem[]): GroupListItem[] {
   return items.map((item) => ({ ...item }));
+}
+
+function toCommonSlide(slide: Slide): CommonSlide {
+  const commonSlide: CommonSlide = {
+    id: slide.id,
+    groupId: slide.groupId,
+    name: slide.name,
+    description: slide.description,
+    imageUrl: slide.imageUrl,
+    category: slide.category,
+    status: slide.status,
+    isVisible: slide.isVisible,
+    isFeatured: slide.isFeatured,
+    isGroup: slide.isGroup,
+    order: slide.order,
+  };
+
+  if (slide.children?.length) {
+    commonSlide.children = slide.children.map((child) => toCommonSlide(child));
+  }
+
+  return commonSlide;
+}
+
+function cloneCommonSlide(slide: CommonSlide): CommonSlide {
+  return {
+    ...slide,
+    children: slide.children?.length ? slide.children.map((child) => cloneCommonSlide(child)) : undefined,
+  };
+}
+
+function collectCommonSlides(
+  items: Slide[],
+  commonById: Map<string, CommonSlide>,
+  usedInAnyServiceIds: Set<string>,
+) {
+  items.forEach((slide) => {
+    usedInAnyServiceIds.add(slide.id);
+    if (!commonById.has(slide.id)) {
+      commonById.set(slide.id, toCommonSlide(slide));
+    }
+    if (slide.children?.length) {
+      collectCommonSlides(slide.children, commonById, usedInAnyServiceIds);
+    }
+  });
+}
+
+const standaloneCommonSlides: CommonSlide[] = [
+  {
+    id: "u-1",
+    name: "Universal Overview",
+    description: "Shared slide template that is not attached to any service yet",
+    status: "draft",
+    isVisible: true,
+    isFeatured: false,
+    order: 1,
+  },
+  {
+    id: "u-2",
+    name: "Universal Roadmap",
+    description: "Shared roadmap slide available for future services",
+    status: "draft",
+    isVisible: true,
+    isFeatured: false,
+    order: 2,
+  },
+  {
+    id: "u-3",
+    name: "Universal KPI Snapshot",
+    description: "Common KPI slide prepared in the global pool",
+    status: "review",
+    isVisible: true,
+    isFeatured: true,
+    order: 3,
+  },
+];
+
+const commonSlidesById = new Map<string, CommonSlide>();
+const usedInAnyServiceIds = new Set<string>();
+Object.values(slidesMock).forEach((serviceSlides) => {
+  collectCommonSlides(serviceSlides, commonSlidesById, usedInAnyServiceIds);
+});
+standaloneCommonSlides.forEach((slide) => {
+  commonSlidesById.set(slide.id, cloneCommonSlide(slide));
+});
+commonSlidesById.forEach((slide, slideId) => {
+  slide.isUsedInAnyService = usedInAnyServiceIds.has(slideId);
+});
+
+function upsertCommonSlide(slide: Slide) {
+  if (!commonSlidesById.has(slide.id)) {
+    const commonSlide = toCommonSlide(slide);
+    commonSlide.isUsedInAnyService = true;
+    commonSlidesById.set(slide.id, commonSlide);
+    return;
+  }
+
+  const current = commonSlidesById.get(slide.id);
+  if (!current) {
+    return;
+  }
+
+  current.description = slide.description;
+  current.imageUrl = slide.imageUrl;
+  current.category = slide.category;
+  current.status = slide.status;
+  current.isFeatured = slide.isFeatured;
+  current.isGroup = slide.isGroup;
+  current.groupId = slide.groupId;
+  current.isUsedInAnyService = true;
 }
 
 function normalizeGlobalGroups() {
@@ -162,6 +273,13 @@ export async function getServices(): Promise<Service[]> {
   return servicesMock;
 }
 
+export async function getAllSlides(): Promise<CommonSlide[]> {
+  await sleep(900);
+  return Array.from(commonSlidesById.values())
+    .map((slide) => cloneCommonSlide(slide))
+    .sort((left, right) => left.id.localeCompare(right.id, "ru"));
+}
+
 export async function getServicesDetail(serviceId: string): Promise<Slide[]> {
   await sleep(1500);
   const slides = slidesMock[serviceId];
@@ -233,6 +351,8 @@ export async function updateSlidesByServiceId(params: {
     if (patch.order !== undefined) {
       slide.order = patch.order;
     }
+
+    upsertCommonSlide(slide);
 
     affectedLevelKeys.add(slide.groupId ?? ROOT_LEVEL_KEY);
   });
@@ -350,6 +470,7 @@ export async function createSlide(payload: SlideCreateRequest): Promise<Slide> {
   }
 
   normalizeTreeOrder(serviceSlides);
+  const commonSlide = commonSlidesById.get(payload.id);
   if (hasSlideWithId(serviceSlides, payload.id)) {
     throw new Error(`Slide with id "${payload.id}" already exists`);
   }
@@ -357,23 +478,41 @@ export async function createSlide(payload: SlideCreateRequest): Promise<Slide> {
   const { level: targetLevel } = getTargetLevel(serviceSlides, payload.serviceId, payload.groupId);
   const targetOrder = clampOrder(payload.order ?? targetLevel.length + 1, 1, targetLevel.length + 1);
 
-  const createdSlide: Slide = {
-    id: payload.id,
-    serviceId: payload.serviceId,
-    groupId: payload.groupId,
-    name: payload.name,
-    description: payload.description,
-    imageUrl: payload.imageUrl,
-    category: payload.category,
-    status: payload.status ?? "draft",
-    isVisible: payload.isVisible ?? true,
-    isFeatured: payload.isFeatured ?? false,
-    order: targetOrder,
-  };
+  const createdSlide: Slide = commonSlide
+    ? {
+        id: payload.id,
+        serviceId: payload.serviceId,
+        groupId: payload.groupId ?? commonSlide.groupId,
+        name: payload.name,
+        description: commonSlide.description,
+        imageUrl: commonSlide.imageUrl,
+        category: commonSlide.category,
+        status: commonSlide.status ?? "draft",
+        isVisible: payload.isVisible ?? (commonSlide.isVisible ?? true),
+        isFeatured: commonSlide.isFeatured ?? false,
+        isGroup: commonSlide.isGroup,
+        order: targetOrder,
+      }
+    : {
+        id: payload.id,
+        serviceId: payload.serviceId,
+        groupId: payload.groupId,
+        name: payload.name,
+        description: payload.description,
+        imageUrl: payload.imageUrl,
+        category: payload.category,
+        status: payload.status ?? "draft",
+        isVisible: payload.isVisible ?? true,
+        isFeatured: payload.isFeatured ?? false,
+        order: targetOrder,
+      };
 
   targetLevel.splice(targetOrder - 1, 0, createdSlide);
   normalizeLevelOrder(targetLevel);
   normalizeTreeOrder(serviceSlides);
+  if (!commonSlide) {
+    upsertCommonSlide(createdSlide);
+  }
 
   console.log("createSlide payload", {
     method: "POST",

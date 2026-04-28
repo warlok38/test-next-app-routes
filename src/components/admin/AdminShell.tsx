@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { Alert, Button, Empty, Layout, Tabs, message } from 'antd';
 import { useRouter } from 'next/navigation';
-import type { FenceUpdatePayload, Service, Slide } from '@/lib/api/types';
+import type {
+  CommonSlide,
+  FenceUpdatePayload,
+  Service,
+  Slide,
+  SlideUpdatePayload,
+} from '@/lib/api/types';
 import { CreateEntityCard } from '@/components/admin/CreateEntityCard';
 import { FencesEditor } from '@/components/admin/FencesEditor';
 import { SlideEditor } from '@/components/admin/SlideEditor';
@@ -23,6 +29,7 @@ const { Sider, Content } = Layout;
 type AdminShellProps = {
   services: Service[];
   slides: Slide[];
+  commonSlides: CommonSlide[];
   selectedServiceId?: string;
   selectedSlideId?: string;
   isCreatePage?: boolean;
@@ -35,13 +42,10 @@ type AdminShellProps = {
   slidesLoading?: boolean;
 };
 
-type PendingUpdate = {
-  id: string;
-} & Record<string, unknown>;
-
 function AdminShellInner({
   services,
   slides,
+  commonSlides,
   selectedServiceId,
   selectedSlideId,
   isCreatePage = false,
@@ -90,12 +94,14 @@ function AdminShellInner({
       }, {}),
     [flatSlides],
   );
-
-  const pendingUpdates = useMemo<PendingUpdate[]>(
+  const pendingUpdates = useMemo<SlideUpdatePayload[]>(
     () =>
       Object.entries(slideDrafts)
         .filter(([slideId]) => Boolean(slideMap[slideId]))
-        .map(([slideId, fields]) => ({ id: slideId, ...fields })),
+        .map(
+          ([slideId, fields]) =>
+            ({ id: slideId, ...(fields as Record<string, unknown>) }) as SlideUpdatePayload,
+        ),
     [slideDrafts, slideMap],
   );
 
@@ -165,7 +171,9 @@ function AdminShellInner({
             if (!confirmServiceChange(nextServiceId)) {
               return;
             }
-            router.push(isCreatePage ? `/admin/${nextServiceId}/create` : `/admin/${nextServiceId}`);
+            router.push(
+              isCreatePage ? `/admin/${nextServiceId}/create` : `/admin/${nextServiceId}`,
+            );
           }}
         />
       </Sider>
@@ -186,7 +194,7 @@ function AdminShellInner({
             {
               key: 'slides',
               label: (
-                <Badge mode='dot' size='small' show={hasPendingUpdates} offset={[-2, -4]}>
+                <Badge mode="dot" size="small" show={hasPendingUpdates} offset={[-2, -4]}>
                   <span>Слайды</span>
                 </Badge>
               ),
@@ -225,7 +233,11 @@ function AdminShellInner({
                     {error ? (
                       <Alert type="error" message={error} showIcon />
                     ) : isCreatePage ? (
-                      <CreateEntityCard activeServiceId={activeServiceId} slides={activeSlides} />
+                      <CreateEntityCard
+                        activeServiceId={activeServiceId}
+                        slides={activeSlides}
+                        commonSlides={commonSlides}
+                      />
                     ) : activeSlide ? (
                       <SlideEditor slide={activeSlide} key={activeSlide.id} />
                     ) : (
@@ -238,7 +250,7 @@ function AdminShellInner({
             {
               key: 'fence',
               label: (
-                <Badge mode='dot' size='small' show={hasPendingFences} offset={[-2, -4]}>
+                <Badge mode="dot" size="small" show={hasPendingFences} offset={[-2, -4]}>
                   <span>Забор</span>
                 </Badge>
               ),

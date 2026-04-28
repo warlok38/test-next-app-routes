@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import cn from "classnames";
-import styles from "@/components/ui/Form/controls.module.css";
+import cn from 'classnames';
+import styles from '@/components/ui/Form/controls.module.css';
 
 type BaseControlProps = {
   id?: string;
@@ -11,11 +11,13 @@ type BaseControlProps = {
 
 type InputProps = BaseControlProps & {
   value?: string;
-  type?: "text" | "number";
+  type?: 'text' | 'number';
   min?: number;
   max?: number;
   step?: number;
   placeholder?: string;
+  disabled?: boolean;
+  readOnly?: boolean;
   onChange?: (value: string) => void;
 };
 
@@ -23,6 +25,8 @@ type TextAreaProps = BaseControlProps & {
   value?: string;
   placeholder?: string;
   rows?: number;
+  disabled?: boolean;
+  readOnly?: boolean;
   onChange?: (value: string) => void;
 };
 
@@ -35,6 +39,7 @@ type SelectOption = {
 type SelectProps = BaseControlProps & {
   value?: string;
   options: SelectOption[];
+  disabled?: boolean;
   onChange?: (value: string) => void;
 };
 
@@ -42,17 +47,20 @@ type CheckboxProps = {
   id?: string;
   checked?: boolean;
   children: React.ReactNode;
+  disabled?: boolean;
   onChange?: (checked: boolean) => void;
 };
 
 function BaseInput({
   id,
   value,
-  type = "text",
+  type = 'text',
   min,
   max,
   step,
   placeholder,
+  disabled,
+  readOnly,
   className,
   hasError,
   onChange,
@@ -64,32 +72,55 @@ function BaseInput({
       min={min}
       max={max}
       step={step}
-      value={value ?? ""}
+      value={value ?? ''}
       placeholder={placeholder}
+      disabled={disabled}
+      readOnly={readOnly}
       onChange={(event) => onChange?.(event.target.value)}
       className={cn(styles.control, className, { [styles.error]: hasError })}
     />
   );
 }
 
-function TextArea({ id, value, placeholder, rows = 4, className, hasError, onChange }: TextAreaProps) {
+function TextArea({
+  id,
+  value,
+  placeholder,
+  rows = 4,
+  disabled,
+  readOnly,
+  className,
+  hasError,
+  onChange,
+}: TextAreaProps) {
   return (
     <textarea
       id={id}
-      value={value ?? ""}
+      value={value ?? ''}
       placeholder={placeholder}
       rows={rows}
+      disabled={disabled}
+      readOnly={readOnly}
       onChange={(event) => onChange?.(event.target.value)}
       className={cn(styles.control, styles.textArea, className, { [styles.error]: hasError })}
     />
   );
 }
 
-export function Select({ id, value, options, className, hasError, onChange }: SelectProps) {
+export function Select({
+  id,
+  value,
+  options,
+  disabled,
+  className,
+  hasError,
+  onChange,
+}: SelectProps) {
   return (
     <select
       id={id}
-      value={value ?? ""}
+      value={value ?? ''}
+      disabled={disabled}
       onChange={(event) => onChange?.(event.target.value)}
       className={cn(styles.control, className, { [styles.error]: hasError })}
     >
@@ -102,13 +133,14 @@ export function Select({ id, value, options, className, hasError, onChange }: Se
   );
 }
 
-export function Checkbox({ id, checked, children, onChange }: CheckboxProps) {
+export function Checkbox({ id, checked, children, disabled, onChange }: CheckboxProps) {
   return (
     <label htmlFor={id} className={styles.checkboxWrap}>
       <input
         id={id}
         type="checkbox"
         checked={Boolean(checked)}
+        disabled={disabled}
         onChange={(event) => onChange?.(event.target.checked)}
         className={styles.checkbox}
       />

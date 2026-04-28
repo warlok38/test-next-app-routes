@@ -1,5 +1,6 @@
-import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
+import { createApi, fakeBaseQuery } from '@reduxjs/toolkit/query/react';
 import type {
+  CommonSlide,
   FencesByKey,
   FenceUpdatePayload,
   GroupListItem,
@@ -10,10 +11,11 @@ import type {
   Slide,
   SlideCreateRequest,
   SlideUpdatePayload,
-} from "@/lib/api/types";
+} from '@/lib/api/types';
 import {
   createGroup,
   createSlide,
+  getAllSlides,
   getFencesDetail,
   getGroups,
   getServices,
@@ -21,12 +23,12 @@ import {
   updateGroup,
   updateFencesByServiceId,
   updateSlidesByServiceId,
-} from "@/lib/api/services";
+} from '@/lib/api/services';
 
 export const adminApi = createApi({
-  reducerPath: "adminApi",
+  reducerPath: 'adminApi',
   baseQuery: fakeBaseQuery(),
-  tagTypes: ["Services", "Slides", "Fences", "Groups"],
+  tagTypes: ['Services', 'Slides', 'Fences', 'Groups'],
   endpoints: (builder) => ({
     getServices: builder.query<Service[], void>({
       queryFn: async () => {
@@ -36,13 +38,29 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "getServices failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'getServices failed',
             },
           };
         }
       },
-      providesTags: ["Services"],
+      providesTags: ['Services'],
+    }),
+    getAllSlides: builder.query<CommonSlide[], void>({
+      queryFn: async () => {
+        try {
+          const data = await getAllSlides();
+          return { data };
+        } catch (error) {
+          return {
+            error: {
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'getAllSlides failed',
+            },
+          };
+        }
+      },
+      providesTags: [{ type: 'Slides', id: 'all-common' }],
     }),
     getServicesDetail: builder.query<Slide[], { serviceId: string }>({
       queryFn: async ({ serviceId }) => {
@@ -52,13 +70,13 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "getServicesDetail failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'getServicesDetail failed',
             },
           };
         }
       },
-      providesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
+      providesTags: (_result, _err, arg) => [{ type: 'Slides', id: arg.serviceId }],
     }),
     getFencesDetail: builder.query<FencesByKey, { serviceId: string }>({
       queryFn: async ({ serviceId }) => {
@@ -68,13 +86,13 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "getFencesDetail failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'getFencesDetail failed',
             },
           };
         }
       },
-      providesTags: (_result, _err, arg) => [{ type: "Fences", id: arg.serviceId }],
+      providesTags: (_result, _err, arg) => [{ type: 'Fences', id: arg.serviceId }],
     }),
     getGroups: builder.query<GroupListItem[], void>({
       queryFn: async () => {
@@ -84,13 +102,13 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "getGroups failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'getGroups failed',
             },
           };
         }
       },
-      providesTags: ["Groups"],
+      providesTags: ['Groups'],
     }),
     updateSlidesByServiceId: builder.mutation<
       void,
@@ -106,14 +124,16 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error:
-                error instanceof Error ? error.message : "updateSlidesByServiceId failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'updateSlidesByServiceId failed',
             },
           };
         }
       },
-      invalidatesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
+      invalidatesTags: (_result, _err, arg) => [
+        { type: 'Slides', id: arg.serviceId },
+        { type: 'Slides', id: 'all-common' },
+      ],
     }),
     updateFencesByServiceId: builder.mutation<
       void,
@@ -129,14 +149,13 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error:
-                error instanceof Error ? error.message : "updateFencesByServiceId failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'updateFencesByServiceId failed',
             },
           };
         }
       },
-      invalidatesTags: (_result, _err, arg) => [{ type: "Fences", id: arg.serviceId }],
+      invalidatesTags: (_result, _err, arg) => [{ type: 'Fences', id: arg.serviceId }],
     }),
     createGroup: builder.mutation<GroupListItem, GroupCreateRequest>({
       queryFn: async (payload) => {
@@ -146,15 +165,18 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "createGroup failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'createGroup failed',
             },
           };
         }
       },
-      invalidatesTags: ["Groups"],
+      invalidatesTags: ['Groups'],
     }),
-    updateGroup: builder.mutation<GroupListItem, { body: GroupUpdateRequest; query: GroupUpdateQuery }>({
+    updateGroup: builder.mutation<
+      GroupListItem,
+      { body: GroupUpdateRequest; query: GroupUpdateQuery }
+    >({
       queryFn: async ({ body, query }) => {
         try {
           const data = await updateGroup({ body, query });
@@ -162,13 +184,13 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "updateGroup failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'updateGroup failed',
             },
           };
         }
       },
-      invalidatesTags: ["Groups"],
+      invalidatesTags: ['Groups'],
     }),
     createSlide: builder.mutation<Slide, SlideCreateRequest>({
       queryFn: async (payload) => {
@@ -178,19 +200,23 @@ export const adminApi = createApi({
         } catch (error) {
           return {
             error: {
-              status: "CUSTOM_ERROR",
-              error: error instanceof Error ? error.message : "createSlide failed",
+              status: 'CUSTOM_ERROR',
+              error: error instanceof Error ? error.message : 'createSlide failed',
             },
           };
         }
       },
-      invalidatesTags: (_result, _err, arg) => [{ type: "Slides", id: arg.serviceId }],
+      invalidatesTags: (_result, _err, arg) => [
+        { type: 'Slides', id: arg.serviceId },
+        { type: 'Slides', id: 'all-common' },
+      ],
     }),
   }),
 });
 
 export const {
   useGetServicesQuery,
+  useGetAllSlidesQuery,
   useGetServicesDetailQuery,
   useGetFencesDetailQuery,
   useGetGroupsQuery,
@@ -200,4 +226,3 @@ export const {
   useUpdateGroupMutation,
   useCreateSlideMutation,
 } = adminApi;
-

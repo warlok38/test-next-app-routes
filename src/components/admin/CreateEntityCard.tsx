@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Space, Tabs, Typography, message } from 'antd';
+import { Button, Card, Divider, Space, Tabs, Typography, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { SLIDES_MAP } from '@/constants/slides';
 import type {
+  CommonSlide,
   GroupCreateRequest,
   GroupListItem,
   Slide,
@@ -25,6 +26,7 @@ import { Checkbox, Input, Select } from '@/components/ui/Form/controls';
 type CreateEntityCardProps = {
   activeServiceId?: string;
   slides: Slide[];
+  commonSlides: CommonSlide[];
 };
 
 type CreateEntityType = 'group' | 'slide';
@@ -64,7 +66,7 @@ const STATUS_OPTIONS: Array<{ value: SlideStatus; label: string }> = [
 
 const NO_GROUP_VALUE = '__NO_GROUP__';
 
-export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardProps) {
+export function CreateEntityCard({ activeServiceId, slides, commonSlides }: CreateEntityCardProps) {
   const router = useRouter();
   const [createGroup, { isLoading: isCreatingGroup }] = useCreateGroupMutation();
   const [createSlide, { isLoading: isCreatingSlide }] = useCreateSlideMutation();
@@ -100,6 +102,14 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
       }, {}),
     [slides],
   );
+  const commonSlidesMap = useMemo(
+    () =>
+      commonSlides.reduce<Record<string, CommonSlide>>((acc, item) => {
+        acc[item.id] = item;
+        return acc;
+      }, {}),
+    [commonSlides],
+  );
 
   const allSlideIds = useMemo(
     () =>
@@ -128,6 +138,10 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
     () => new Set(availableSlideIdOptions.map((option) => option.value)),
     [availableSlideIdOptions],
   );
+  const selectedCommonSlide = createSlideState.id ? commonSlidesMap[createSlideState.id] : undefined;
+  const isSelectedIdInCommonList = Boolean(selectedCommonSlide);
+  const isSelectedIdUsedInAnyService = Boolean(selectedCommonSlide?.isUsedInAnyService);
+  const shouldDisableCommonFields = isSelectedIdInCommonList && isSelectedIdUsedInAnyService;
   const groupOptions = useMemo(
     () =>
       normalizeGroupItems(groups).map((group) => ({
@@ -184,12 +198,34 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
         id: nextId,
         groupId: nextGroupId,
         order: nextOrder,
+        name: commonSlidesMap[nextId]?.name ?? '',
+        description: commonSlidesMap[nextId]?.description ?? '',
+        status: commonSlidesMap[nextId]?.status ?? 'draft',
+        isVisible: commonSlidesMap[nextId]?.isVisible ?? true,
+        isFeatured: commonSlidesMap[nextId]?.isFeatured ?? false,
       };
       isProgrammaticOrderUpdateRef.current = true;
-      slideForm.setFieldsValue({ id: nextId, groupId: nextGroupId, order: nextOrder });
+      slideForm.setFieldsValue({
+        id: nextId,
+        groupId: nextGroupId,
+        order: nextOrder,
+        name: nextState.name,
+        description: nextState.description,
+        status: nextState.status,
+        isVisible: nextState.isVisible,
+        isFeatured: nextState.isFeatured,
+      });
       return nextState;
     });
-  }, [availableSlideIdOptions, availableSlideIdSet, createEntityType, groupOptions, slideForm, slides]);
+  }, [
+    availableSlideIdOptions,
+    availableSlideIdSet,
+    commonSlidesMap,
+    createEntityType,
+    groupOptions,
+    slideForm,
+    slides,
+  ]);
 
   useEffect(() => {
     if (createEntityType !== 'group') {
@@ -231,6 +267,47 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
       isProgrammaticOrderUpdateRef.current = true;
       setCreateSlideState(nextValues);
       slideForm.setFieldsValue({ order: nextOrder });
+      return;
+    }
+
+    if (changedValues.id !== undefined) {
+      const commonSlide = commonSlidesMap[values.id];
+      if (commonSlide) {
+        const nextValues = {
+          ...values,
+          name: commonSlide.name ?? '',
+          description: commonSlide.description ?? '',
+          status: commonSlide.status ?? values.status,
+          isVisible: commonSlide.isVisible ?? true,
+          isFeatured: commonSlide.isFeatured ?? false,
+        };
+        setCreateSlideState(nextValues);
+        slideForm.setFieldsValue({
+          name: nextValues.name,
+          description: nextValues.description,
+          status: nextValues.status,
+          isVisible: nextValues.isVisible,
+          isFeatured: nextValues.isFeatured,
+        });
+        return;
+      }
+
+      const nextValues = {
+        ...values,
+        name: '',
+        description: '',
+        status: 'draft' as SlideStatus,
+        isVisible: true,
+        isFeatured: false,
+      };
+      setCreateSlideState(nextValues);
+      slideForm.setFieldsValue({
+        name: nextValues.name,
+        description: nextValues.description,
+        status: nextValues.status,
+        isVisible: nextValues.isVisible,
+        isFeatured: nextValues.isFeatured,
+      });
       return;
     }
 
@@ -324,10 +401,14 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
       serviceId: activeServiceId,
       groupId: selectedGroupId,
       name: values.name.trim(),
-      description: values.description.trim() || undefined,
-      status: values.status,
+      description: shouldDisableCommonFields
+        ? selectedCommonSlide?.description
+        : values.description.trim() || undefined,
+      status: shouldDisableCommonFields ? selectedCommonSlide?.status ?? values.status : values.status,
       isVisible: values.isVisible,
-      isFeatured: values.isFeatured,
+      isFeatured: shouldDisableCommonFields
+        ? selectedCommonSlide?.isFeatured ?? values.isFeatured
+        : values.isFeatured,
       order: targetOrder,
     };
     const shiftedSiblings = siblings
@@ -421,15 +502,7 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
                   >
                     <Input placeholder="Введите название слайда" />
                   </Form.Item>
-                  <Form.Item<CreateSlideFormValues, 'description'>
-                    name="description"
-                    label="Описание"
-                  >
-                    <Input.TextArea placeholder="Введите описание" rows={4} />
-                  </Form.Item>
-                  <Form.Item<CreateSlideFormValues, 'status'> name="status" label="Статус">
-                    <Select options={STATUS_OPTIONS} />
-                  </Form.Item>
+                  <Typography.Text strong>Сервисные поля</Typography.Text>
                   <Form.Item<CreateSlideFormValues, 'order'>
                     name="order"
                     label={slideOrderLabel}
@@ -446,11 +519,35 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
                   >
                     <Checkbox>Виден пользователям</Checkbox>
                   </Form.Item>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <Space align="center" size={8}>
+                    <Typography.Text strong>Общие поля</Typography.Text>
+                    {shouldDisableCommonFields ? (
+                      <Typography.Text type="secondary">
+                        Слайд уже используется в другом сервисе, поэтому общие поля недоступны при
+                        создании.
+                      </Typography.Text>
+                    ) : null}
+                  </Space>
+                  <Form.Item<CreateSlideFormValues, 'description'>
+                    name="description"
+                    label="Описание"
+                  >
+                    <Input.TextArea
+                      placeholder="Введите описание"
+                      rows={4}
+                      disabled={shouldDisableCommonFields}
+                      readOnly={shouldDisableCommonFields}
+                    />
+                  </Form.Item>
+                  <Form.Item<CreateSlideFormValues, 'status'> name="status" label="Статус">
+                    <Select options={STATUS_OPTIONS} disabled={shouldDisableCommonFields} />
+                  </Form.Item>
                   <Form.Item<CreateSlideFormValues, 'isFeatured'>
                     name="isFeatured"
                     valuePropName="checked"
                   >
-                    <Checkbox>Показывать как избранный</Checkbox>
+                    <Checkbox disabled={shouldDisableCommonFields}>Показывать как избранный</Checkbox>
                   </Form.Item>
                 </Form>
                 {!availableSlideIdOptions.length ? (

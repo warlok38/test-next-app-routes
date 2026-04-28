@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { Button, Card } from 'antd';
+import { Button, Card, Divider, Typography } from 'antd';
 import { Form } from '@/components/ui/Form/Form';
 import { Checkbox, Input, Select } from '@/components/ui/Form/controls';
 import type { Slide, SlideDraftPayload } from '@/lib/api/types';
@@ -33,6 +33,7 @@ export function SlideEditor({ slide }: SlideEditorProps) {
   const initialValues = useMemo<SlideFormValues>(
     () => ({
       name: mergedSlide.name,
+      order: String(mergedSlide.order ?? 1),
       description: mergedSlide.description ?? '',
       status: mergedSlide.status ?? 'draft',
       isVisible: Boolean(mergedSlide.isVisible),
@@ -43,6 +44,7 @@ export function SlideEditor({ slide }: SlideEditorProps) {
       mergedSlide.isFeatured,
       mergedSlide.isVisible,
       mergedSlide.name,
+      mergedSlide.order,
       mergedSlide.status,
     ],
   );
@@ -50,12 +52,13 @@ export function SlideEditor({ slide }: SlideEditorProps) {
   const baseValues = useMemo<SlideFormValues>(
     () => ({
       name: slide.name,
+      order: String(slide.order ?? 1),
       description: slide.description ?? '',
       status: slide.status ?? 'draft',
       isVisible: Boolean(slide.isVisible),
       isFeatured: Boolean(slide.isFeatured),
     }),
-    [slide.description, slide.isFeatured, slide.isVisible, slide.name, slide.status],
+    [slide.description, slide.isFeatured, slide.isVisible, slide.name, slide.order, slide.status],
   );
 
   const onValuesChange = useCallback(
@@ -63,13 +66,29 @@ export function SlideEditor({ slide }: SlideEditorProps) {
       const draftKeys = Object.keys(baseValues) as Array<keyof SlideFormValues>;
 
       const nextFields = draftKeys.reduce<SlideDraftPayload>((acc, field) => {
-        if (allValues[field] === baseValues[field]) {
+        const nextValue = allValues[field];
+        const baseValue = baseValues[field];
+        if (field === 'order') {
+          const parsedOrder = Number(nextValue);
+          const parsedBaseOrder = Number(baseValue);
+          if (
+            !Number.isInteger(parsedOrder) ||
+            parsedOrder < 1 ||
+            Number.isNaN(parsedBaseOrder) ||
+            parsedOrder === parsedBaseOrder
+          ) {
+            return acc;
+          }
+          return { ...acc, order: parsedOrder };
+        }
+
+        if (nextValue === baseValue) {
           return acc;
         }
 
         return {
           ...acc,
-          [field]: allValues[field],
+          [field]: nextValue,
         } as SlideDraftPayload;
       }, {});
 
@@ -104,6 +123,7 @@ export function SlideEditor({ slide }: SlideEditorProps) {
         initialValues={initialValues}
         onValuesChange={onValuesChange}
       >
+        <Typography.Text strong>Сервисные поля</Typography.Text>
         <Form.Item<SlideFormValues, 'name'>
           name="name"
           label="Название"
@@ -112,16 +132,37 @@ export function SlideEditor({ slide }: SlideEditorProps) {
           <Input placeholder="Введите название слайда" />
         </Form.Item>
 
+        <Form.Item<SlideFormValues, 'order'>
+          name="order"
+          label="Порядок"
+          rules={[
+            { required: true, message: 'Введите порядок' },
+            {
+              validator: (value) => {
+                const parsedOrder = Number(value);
+                if (!Number.isInteger(parsedOrder) || parsedOrder < 1) {
+                  return 'Порядок должен быть целым числом 1 или больше';
+                }
+                return undefined;
+              },
+            },
+          ]}
+        >
+          <Input type="number" min={1} step={1} placeholder="Например: 3" />
+        </Form.Item>
+
+        <Form.Item<SlideFormValues, 'isVisible'> name="isVisible" valuePropName="checked">
+          <Checkbox>Виден пользователям</Checkbox>
+        </Form.Item>
+
+        <Divider style={{ margin: '12px 0' }} />
+        <Typography.Text strong>Общие поля</Typography.Text>
         <Form.Item<SlideFormValues, 'description'> name="description" label="Описание">
           <Input.TextArea placeholder="Введите описание" rows={4} />
         </Form.Item>
 
         <Form.Item<SlideFormValues, 'status'> name="status" label="Статус">
           <Select options={statusOptions} />
-        </Form.Item>
-
-        <Form.Item<SlideFormValues, 'isVisible'> name="isVisible" valuePropName="checked">
-          <Checkbox>Виден пользователям</Checkbox>
         </Form.Item>
 
         <Form.Item<SlideFormValues, 'isFeatured'> name="isFeatured" valuePropName="checked">

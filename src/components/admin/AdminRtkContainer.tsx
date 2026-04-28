@@ -1,10 +1,14 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { AdminShell } from "@/components/admin/AdminShell";
-import { useGetServicesDetailQuery, useGetServicesQuery } from "@/lib/store/adminApi";
-import { findSlideById } from "@/lib/slides/tree";
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { AdminShell } from '@/components/admin/AdminShell';
+import {
+  useGetAllSlidesQuery,
+  useGetServicesDetailQuery,
+  useGetServicesQuery,
+} from '@/lib/store/adminApi';
+import { findSlideById } from '@/lib/slides/tree';
 
 type AdminRtkContainerProps = {
   initialServiceId?: string;
@@ -38,23 +42,25 @@ export function AdminRtkContainer({
   }, [initialServiceId, router, firstServiceId, servicesQuery.isError, servicesQuery.isSuccess]);
 
   const slidesQuery = useGetServicesDetailQuery(
-    { serviceId: selectedServiceId ?? "" },
-    { skip: !selectedServiceId }
+    { serviceId: selectedServiceId ?? '' },
+    { skip: !selectedServiceId },
   );
+  const commonSlidesQuery = useGetAllSlidesQuery();
   const slides = slidesQuery.data || [];
+  const commonSlides = commonSlidesQuery.data || [];
 
   const servicesError =
-    typeof servicesQuery.error === "object" && servicesQuery.error && "error" in servicesQuery.error
-      ? String((servicesQuery.error as { error?: unknown }).error ?? "Не удалось загрузить сервисы")
+    typeof servicesQuery.error === 'object' && servicesQuery.error && 'error' in servicesQuery.error
+      ? String((servicesQuery.error as { error?: unknown }).error ?? 'Не удалось загрузить сервисы')
       : servicesQuery.error
-        ? "Не удалось загрузить сервисы"
+        ? 'Не удалось загрузить сервисы'
         : undefined;
 
   const slidesError =
-    typeof slidesQuery.error === "object" && slidesQuery.error && "error" in slidesQuery.error
-      ? String((slidesQuery.error as { error?: unknown }).error ?? "Не удалось загрузить слайды")
+    typeof slidesQuery.error === 'object' && slidesQuery.error && 'error' in slidesQuery.error
+      ? String((slidesQuery.error as { error?: unknown }).error ?? 'Не удалось загрузить слайды')
       : slidesQuery.error
-        ? "Не удалось загрузить слайды"
+        ? 'Не удалось загрузить слайды'
         : undefined;
 
   const slideNotFoundError =
@@ -65,12 +71,15 @@ export function AdminRtkContainer({
   const detailError = slidesError ?? slideNotFoundError;
 
   const selectedSlideId =
-    !isCreatePage && initialSlideId && findSlideById(slides, initialSlideId) ? initialSlideId : undefined;
+    !isCreatePage && initialSlideId && findSlideById(slides, initialSlideId)
+      ? initialSlideId
+      : undefined;
 
   return (
     <AdminShell
       services={services}
       slides={slides}
+      commonSlides={commonSlides}
       selectedServiceId={selectedServiceId}
       selectedSlideId={selectedSlideId}
       servicesError={servicesError}
@@ -81,4 +90,3 @@ export function AdminRtkContainer({
     />
   );
 }
-
