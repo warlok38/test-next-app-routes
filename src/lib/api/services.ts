@@ -82,18 +82,13 @@ function cloneCommonSlide(slide: CommonSlide): CommonSlide {
   };
 }
 
-function collectCommonSlides(
-  items: Slide[],
-  commonById: Map<string, CommonSlide>,
-  usedInAnyServiceIds: Set<string>,
-) {
+function collectCommonSlides(items: Slide[], commonById: Map<string, CommonSlide>) {
   items.forEach((slide) => {
-    usedInAnyServiceIds.add(slide.id);
     if (!commonById.has(slide.id)) {
       commonById.set(slide.id, toCommonSlide(slide));
     }
     if (slide.children?.length) {
-      collectCommonSlides(slide.children, commonById, usedInAnyServiceIds);
+      collectCommonSlides(slide.children, commonById);
     }
   });
 }
@@ -129,22 +124,16 @@ const standaloneCommonSlides: CommonSlide[] = [
 ];
 
 const commonSlidesById = new Map<string, CommonSlide>();
-const usedInAnyServiceIds = new Set<string>();
 Object.values(slidesMock).forEach((serviceSlides) => {
-  collectCommonSlides(serviceSlides, commonSlidesById, usedInAnyServiceIds);
+  collectCommonSlides(serviceSlides, commonSlidesById);
 });
 standaloneCommonSlides.forEach((slide) => {
   commonSlidesById.set(slide.id, cloneCommonSlide(slide));
 });
-commonSlidesById.forEach((slide, slideId) => {
-  slide.isUsedInAnyService = usedInAnyServiceIds.has(slideId);
-});
 
 function upsertCommonSlide(slide: Slide) {
   if (!commonSlidesById.has(slide.id)) {
-    const commonSlide = toCommonSlide(slide);
-    commonSlide.isUsedInAnyService = true;
-    commonSlidesById.set(slide.id, commonSlide);
+    commonSlidesById.set(slide.id, toCommonSlide(slide));
     return;
   }
 
@@ -160,7 +149,6 @@ function upsertCommonSlide(slide: Slide) {
   current.isFeatured = slide.isFeatured;
   current.isGroup = slide.isGroup;
   current.groupId = slide.groupId;
-  current.isUsedInAnyService = true;
 }
 
 function normalizeGlobalGroups() {

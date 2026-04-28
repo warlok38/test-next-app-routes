@@ -138,10 +138,6 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
     () => new Set(availableSlideIdOptions.map((option) => option.value)),
     [availableSlideIdOptions],
   );
-  const selectedCommonSlide = createSlideState.id ? commonSlidesMap[createSlideState.id] : undefined;
-  const isSelectedIdInCommonList = Boolean(selectedCommonSlide);
-  const isSelectedIdUsedInAnyService = Boolean(selectedCommonSlide?.isUsedInAnyService);
-  const shouldDisableCommonFields = isSelectedIdInCommonList && isSelectedIdUsedInAnyService;
   const groupOptions = useMemo(
     () =>
       normalizeGroupItems(groups).map((group) => ({
@@ -401,14 +397,10 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
       serviceId: activeServiceId,
       groupId: selectedGroupId,
       name: values.name.trim(),
-      description: shouldDisableCommonFields
-        ? selectedCommonSlide?.description
-        : values.description.trim() || undefined,
-      status: shouldDisableCommonFields ? selectedCommonSlide?.status ?? values.status : values.status,
+      description: values.description.trim() || undefined,
+      status: values.status,
       isVisible: values.isVisible,
-      isFeatured: shouldDisableCommonFields
-        ? selectedCommonSlide?.isFeatured ?? values.isFeatured
-        : values.isFeatured,
+      isFeatured: values.isFeatured,
       order: targetOrder,
     };
     const shiftedSiblings = siblings
@@ -522,12 +514,6 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
                   <Divider style={{ margin: '12px 0' }} />
                   <Space align="center" size={8}>
                     <Typography.Text strong>Общие поля</Typography.Text>
-                    {shouldDisableCommonFields ? (
-                      <Typography.Text type="secondary">
-                        Слайд уже используется в другом сервисе, поэтому общие поля недоступны при
-                        создании.
-                      </Typography.Text>
-                    ) : null}
                   </Space>
                   <Form.Item<CreateSlideFormValues, 'description'>
                     name="description"
@@ -536,18 +522,16 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
                     <Input.TextArea
                       placeholder="Введите описание"
                       rows={4}
-                      disabled={shouldDisableCommonFields}
-                      readOnly={shouldDisableCommonFields}
                     />
                   </Form.Item>
                   <Form.Item<CreateSlideFormValues, 'status'> name="status" label="Статус">
-                    <Select options={STATUS_OPTIONS} disabled={shouldDisableCommonFields} />
+                    <Select options={STATUS_OPTIONS} />
                   </Form.Item>
                   <Form.Item<CreateSlideFormValues, 'isFeatured'>
                     name="isFeatured"
                     valuePropName="checked"
                   >
-                    <Checkbox disabled={shouldDisableCommonFields}>Показывать как избранный</Checkbox>
+                    <Checkbox>Показывать как избранный</Checkbox>
                   </Form.Item>
                 </Form>
                 {!availableSlideIdOptions.length ? (

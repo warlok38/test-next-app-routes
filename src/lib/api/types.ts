@@ -22,7 +22,6 @@ export type Slide = {
 };
 
 export type CommonSlide = Omit<Slide, "serviceId" | "children"> & {
-  isUsedInAnyService?: boolean;
   children?: CommonSlide[];
 };
 
