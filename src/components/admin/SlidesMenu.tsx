@@ -6,16 +6,18 @@ import { PlusOutlined } from '@ant-design/icons';
 import { Button, Spin, Tooltip, Typography } from 'antd';
 import type { Slide } from '@/lib/api/types';
 import { Badge } from '@/components/ui/Badge';
-import { Menu, type MenuItem } from '@/components/ui/Menu';
+import { Menu, type MenuItem, type MenuReorderEvent } from '@/components/ui/Menu';
 import { useServiceContext } from '@/lib/state/slideDraftsContext';
 
 type SlidesMenuProps = {
   slides: Slide[];
+  orderDrafts?: Record<string, number>;
   /** Смена сервиса сбрасывает раскрытие под другое дерево слайдов */
   activeServiceId?: string;
   activeSlideId?: string;
   changedSlideIds?: string[];
   loading?: boolean;
+  onReorderLevel?: (updates: Array<{ id: string; order: number }>) => void;
   onSelect: (slideId: string) => void;
   onCreate?: () => void;
 };
@@ -24,23 +26,50 @@ const INDICATOR_COLOR = '#faad14';
 
 export function SlidesMenu({
   slides,
+  orderDrafts = {},
   activeServiceId,
   activeSlideId,
   changedSlideIds = [],
   loading,
+  onReorderLevel,
   onSelect,
   onCreate,
 }: SlidesMenuProps) {
   const { slidesMenuOpenKeys, setSlidesMenuOpenKeys, lastServiceIdForSlidesMenuRef } =
     useServiceContext();
   const changedSet = useMemo(() => new Set(changedSlideIds), [changedSlideIds]);
+  const effectiveSlides = useMemo(() => applyOrderDrafts(slides, orderDrafts), [slides, orderDrafts]);
 
   const menuItems = useMemo(
-    () => mapToMenuItems(slides, changedSet),
-    [slides, changedSet],
+    () => mapToMenuItems(effectiveSlides, changedSet),
+    [effectiveSlides, changedSet],
   );
 
-  const parentKeys = useMemo(() => findParentKeys(slides, activeSlideId), [slides, activeSlideId]);
+  const parentKeys = useMemo(
+    () => findParentKeys(effectiveSlides, activeSlideId),
+    [effectiveSlides, activeSlideId],
+  );
+
+  const handleReorder = (event: MenuReorderEvent) => {
+    const levelItems = getLevelItems(effectiveSlides, event.containerId);
+    if (!levelItems.length) {
+      return;
+    }
+
+    const activeIndex = levelItems.findIndex((item) => item.id === event.activeKey);
+    const overIndex = levelItems.findIndex((item) => item.id === event.overKey);
+    if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+      return;
+    }
+
+    const reordered = move(levelItems, activeIndex, overIndex);
+    onReorderLevel?.(
+      reordered.map((slide, index) => ({
+        id: slide.id,
+        order: index + 1,
+      })),
+    );
+  };
 
   useEffect(() => {
     if (lastServiceIdForSlidesMenuRef.current !== activeServiceId) {
@@ -80,6 +109,8 @@ export function SlidesMenu({
           openKeys={slidesMenuOpenKeys}
           onOpenChange={(keys) => setSlidesMenuOpenKeys(keys as string[])}
           items={menuItems}
+          sortable
+          onReorder={handleReorder}
           onClick={(item) => onSelect(item.key)}
         />
       </div>
@@ -159,4 +190,52 @@ function countChangedInTree(slide: Slide, changedSet: ReadonlySet<string>): numb
     slide.children?.reduce((acc, child) => acc + countChangedInTree(child, changedSet), 0) ?? 0;
 
   return self + children;
+}
+
+function applyOrderDrafts(items: Slide[], orderDrafts: Record<string, number>): Slide[] {
+  return [...items]
+    .map((item) => ({
+      ...item,
+      order: typeof orderDrafts[item.id] === 'number' ? orderDrafts[item.id] : item.order,
+      children: item.children?.length ? applyOrderDrafts(item.children, orderDrafts) : undefined,
+    }))
+    .sort(compareByOrder);
+}
+
+function compareByOrder(left: Slide, right: Slide): number {
+  if (left.order === right.order) {
+    return left.name.localeCompare(right.name, 'ru');
+  }
+  return left.order - right.order;
+}
+
+function move<T>(items: T[], from: number, to: number): T[] {
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function getLevelItems(items: Slide[], containerId: string): Slide[] {
+  if (containerId === '__root__') {
+    return [...items].sort(compareByOrder);
+  }
+
+  const parent = findSlideById(items, containerId);
+  return [...(parent?.children ?? [])].sort(compareByOrder);
+}
+
+function findSlideById(items: Slide[], targetId: string): Slide | undefined {
+  for (const item of items) {
+    if (item.id === targetId) {
+      return item;
+    }
+    if (item.children?.length) {
+      const nested = findSlideById(item.children, targetId);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+  return undefined;
 }

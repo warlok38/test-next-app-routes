@@ -16,6 +16,8 @@ type InputProps = BaseControlProps & {
   max?: number;
   step?: number;
   placeholder?: string;
+  disabled?: boolean;
+  readOnly?: boolean;
   onChange?: (value: string) => void;
 };
 
@@ -53,6 +55,8 @@ function BaseInput({
   max,
   step,
   placeholder,
+  disabled,
+  readOnly,
   className,
   hasError,
   onChange,
@@ -66,6 +70,8 @@ function BaseInput({
       step={step}
       value={value ?? ""}
       placeholder={placeholder}
+      disabled={disabled}
+      readOnly={readOnly}
       onChange={(event) => onChange?.(event.target.value)}
       className={cn(styles.control, className, { [styles.error]: hasError })}
     />

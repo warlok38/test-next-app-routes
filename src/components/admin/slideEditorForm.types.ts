@@ -6,6 +6,7 @@ export type SlideFormValues = {
   status: SlideStatus;
   isVisible: boolean;
   isFeatured: boolean;
+  order: number;
 };
 
 export type SlideStatusOption = {

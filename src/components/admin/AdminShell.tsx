@@ -55,6 +55,8 @@ function AdminShellInner({
     syncActiveService,
     confirmServiceChange,
     slideDrafts,
+    setSlideDraft,
+    removeSlideDraft,
     fenceDrafts,
     setFenceDrafts,
     clearAllDrafts,
@@ -104,6 +106,15 @@ function AdminShellInner({
   const hasPendingFences = pendingFences.length > 0;
   const hasAnyPendingUpdates = hasPendingUpdates || hasPendingFences;
   const changedSlideIds = useMemo(() => pendingUpdates.map((item) => item.id), [pendingUpdates]);
+  const orderDrafts = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(slideDrafts)
+          .filter(([, draft]) => typeof draft.order === 'number')
+          .map(([slideId, draft]) => [slideId, draft.order as number]),
+      ) as Record<string, number>,
+    [slideDrafts],
+  );
   const isSaving = isSavingSlides || isSavingFences;
 
   const handlePendingFencesChange = useCallback(
@@ -144,6 +155,57 @@ function AdminShellInner({
       message.error(text);
     }
   };
+
+  const handleSlidesReorder = useCallback(
+    (updates: Array<{ id: string; order: number }>) => {
+      updates.forEach(({ id, order }) => {
+        const sourceSlide = slideMap[id];
+        if (!sourceSlide) {
+          return;
+        }
+
+        const currentDraft = slideDrafts[id] ?? {};
+        const nextDraft = { ...currentDraft };
+        if (order === sourceSlide.order) {
+          delete nextDraft.order;
+        } else {
+          nextDraft.order = order;
+        }
+
+        if (Object.keys(nextDraft).length > 0) {
+          setSlideDraft(id, nextDraft);
+          return;
+        }
+        removeSlideDraft(id);
+      });
+    },
+    [removeSlideDraft, setSlideDraft, slideDrafts, slideMap],
+  );
+
+  const handleResetOrderLevel = useCallback(
+    (slideId: string) => {
+      const levelSlides = findLevelBySlideId(activeSlides, slideId);
+      if (!levelSlides) {
+        return;
+      }
+
+      levelSlides.forEach((item) => {
+        const currentDraft = slideDrafts[item.id];
+        if (!currentDraft || typeof currentDraft.order !== 'number') {
+          return;
+        }
+
+        const nextDraft = { ...currentDraft };
+        delete nextDraft.order;
+        if (Object.keys(nextDraft).length > 0) {
+          setSlideDraft(item.id, nextDraft);
+          return;
+        }
+        removeSlideDraft(item.id);
+      });
+    },
+    [activeSlides, removeSlideDraft, setSlideDraft, slideDrafts],
+  );
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -203,10 +265,12 @@ function AdminShellInner({
                   >
                     <SlidesMenu
                       slides={activeSlides}
+                      orderDrafts={orderDrafts}
                       activeServiceId={activeServiceId}
                       activeSlideId={activeSlideId}
                       changedSlideIds={changedSlideIds}
                       loading={slidesLoading}
+                      onReorderLevel={handleSlidesReorder}
                       onCreate={() => {
                         if (!activeServiceId) {
                           return;
@@ -227,7 +291,11 @@ function AdminShellInner({
                     ) : isCreatePage ? (
                       <CreateEntityCard activeServiceId={activeServiceId} slides={activeSlides} />
                     ) : activeSlide ? (
-                      <SlideEditor slide={activeSlide} key={activeSlide.id} />
+                      <SlideEditor
+                        slide={activeSlide}
+                        key={activeSlide.id}
+                        onResetOrderLevel={handleResetOrderLevel}
+                      />
                     ) : (
                       <Empty description="Выберите слайд из списка" />
                     )}
@@ -267,4 +335,23 @@ function AdminShellInner({
 
 export function AdminShell(props: AdminShellProps) {
   return <AdminShellInner {...props} />;
+}
+
+function findLevelBySlideId(items: Slide[], slideId: string): Slide[] | null {
+  if (items.some((item) => item.id === slideId)) {
+    return items;
+  }
+
+  for (const item of items) {
+    if (!item.children?.length) {
+      continue;
+    }
+
+    const nestedLevel = findLevelBySlideId(item.children, slideId);
+    if (nestedLevel) {
+      return nestedLevel;
+    }
+  }
+
+  return null;
 }

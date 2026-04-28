@@ -10,6 +10,7 @@ import { useServiceContext } from '@/lib/state/slideDraftsContext';
 
 type SlideEditorProps = {
   slide: Slide;
+  onResetOrderLevel?: (slideId: string) => void;
 };
 
 const statusOptions: SlideStatusOption[] = [
@@ -18,7 +19,7 @@ const statusOptions: SlideStatusOption[] = [
   { value: 'published', label: 'Published' },
 ];
 
-export function SlideEditor({ slide }: SlideEditorProps) {
+export function SlideEditor({ slide, onResetOrderLevel }: SlideEditorProps) {
   const [form] = Form.useForm<SlideFormValues>();
   const { slideDrafts, setSlideDraft, removeSlideDraft } = useServiceContext();
 
@@ -37,12 +38,14 @@ export function SlideEditor({ slide }: SlideEditorProps) {
       status: mergedSlide.status ?? 'draft',
       isVisible: Boolean(mergedSlide.isVisible),
       isFeatured: Boolean(mergedSlide.isFeatured),
+      order: mergedSlide.order,
     }),
     [
       mergedSlide.description,
       mergedSlide.isFeatured,
       mergedSlide.isVisible,
       mergedSlide.name,
+      mergedSlide.order,
       mergedSlide.status,
     ],
   );
@@ -54,8 +57,9 @@ export function SlideEditor({ slide }: SlideEditorProps) {
       status: slide.status ?? 'draft',
       isVisible: Boolean(slide.isVisible),
       isFeatured: Boolean(slide.isFeatured),
+      order: slide.order,
     }),
-    [slide.description, slide.isFeatured, slide.isVisible, slide.name, slide.status],
+    [slide.description, slide.isFeatured, slide.isVisible, slide.name, slide.order, slide.status],
   );
 
   const onValuesChange = useCallback(
@@ -87,8 +91,9 @@ export function SlideEditor({ slide }: SlideEditorProps) {
   const canResetSlide = Boolean(draftForSlide && Object.keys(draftForSlide).length > 0);
 
   const handleResetSlide = useCallback(() => {
+    onResetOrderLevel?.(slide.id);
     removeSlideDraft(slide.id);
-  }, [removeSlideDraft, slide.id]);
+  }, [onResetOrderLevel, removeSlideDraft, slide.id]);
 
   return (
     <Card
@@ -118,6 +123,10 @@ export function SlideEditor({ slide }: SlideEditorProps) {
 
         <Form.Item<SlideFormValues, 'status'> name="status" label="Статус">
           <Select options={statusOptions} />
+        </Form.Item>
+
+        <Form.Item<SlideFormValues, 'order'> name="order" label="Порядок">
+          <Input type="number" disabled />
         </Form.Item>
 
         <Form.Item<SlideFormValues, 'isVisible'> name="isVisible" valuePropName="checked">
