@@ -92,6 +92,7 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
   });
   const isOrderManuallyEditedRef = useRef(false);
   const isProgrammaticOrderUpdateRef = useRef(false);
+  const createSlideStateRef = useRef(createSlideState);
 
   const isCreating = isCreatingGroup || isCreatingSlide;
   const slideMap = useMemo(
@@ -158,60 +159,69 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
   );
   const slideCountOnLevel = Math.max(0, slideOrderMax - 1);
   const slideOrderLabel = `Порядок (текущий уровень: ${slideCountOnLevel}; диапазон: 1..${slideOrderMax})`;
+
+  useEffect(() => {
+    createSlideStateRef.current = createSlideState;
+  }, [createSlideState]);
+
   useEffect(() => {
     if (createEntityType !== 'slide') {
       return;
     }
 
-    setCreateSlideState((previous) => {
-      const nextId =
-        previous.id && availableSlideIdSet.has(previous.id)
-          ? previous.id
-          : (availableSlideIdOptions[0]?.value ?? '');
-      const nextGroupId =
-        previous.groupId &&
-        (previous.groupId === NO_GROUP_VALUE ||
-          groupOptions.some((groupOption) => groupOption.value === previous.groupId))
-          ? previous.groupId
-          : NO_GROUP_VALUE;
-      const defaultOrder = String(getNextOrderOnLevel(slides, normalizeGroupId(nextGroupId)));
-      const shouldKeepManualOrder =
-        isOrderManuallyEditedRef.current &&
-        previous.groupId === nextGroupId &&
-        previous.order.trim().length > 0;
-      const nextOrder = shouldKeepManualOrder ? previous.order : defaultOrder;
+    const previous = createSlideStateRef.current;
+    const nextId =
+      previous.id && availableSlideIdSet.has(previous.id)
+        ? previous.id
+        : (availableSlideIdOptions[0]?.value ?? '');
+    const nextGroupId =
+      previous.groupId &&
+      (previous.groupId === NO_GROUP_VALUE ||
+        groupOptions.some((groupOption) => groupOption.value === previous.groupId))
+        ? previous.groupId
+        : NO_GROUP_VALUE;
+    const defaultOrder = String(getNextOrderOnLevel(slides, normalizeGroupId(nextGroupId)));
+    const shouldKeepManualOrder =
+      isOrderManuallyEditedRef.current &&
+      previous.groupId === nextGroupId &&
+      previous.order.trim().length > 0;
+    const nextOrder = shouldKeepManualOrder ? previous.order : defaultOrder;
 
-      if (previous.groupId !== nextGroupId) {
-        isOrderManuallyEditedRef.current = false;
-      }
+    if (previous.groupId !== nextGroupId) {
+      isOrderManuallyEditedRef.current = false;
+    }
 
-      if (previous.id === nextId && previous.groupId === nextGroupId && previous.order === nextOrder) {
-        return previous;
-      }
+    const nextState = {
+      ...previous,
+      id: nextId,
+      groupId: nextGroupId,
+      order: nextOrder,
+      name: commonSlidesMap[nextId]?.name ?? '',
+      description: commonSlidesMap[nextId]?.description ?? '',
+      status: commonSlidesMap[nextId]?.status ?? 'draft',
+      isVisible: commonSlidesMap[nextId]?.isVisible ?? true,
+      isFeatured: commonSlidesMap[nextId]?.isFeatured ?? false,
+    };
+    const stateChanged =
+      previous.id !== nextState.id ||
+      previous.groupId !== nextState.groupId ||
+      previous.order !== nextState.order;
 
-      const nextState = {
-        ...previous,
-        id: nextId,
-        groupId: nextGroupId,
-        order: nextOrder,
-        name: commonSlidesMap[nextId]?.name ?? '',
-        description: commonSlidesMap[nextId]?.description ?? '',
-        status: commonSlidesMap[nextId]?.status ?? 'draft',
-        isVisible: commonSlidesMap[nextId]?.isVisible ?? true,
-        isFeatured: commonSlidesMap[nextId]?.isFeatured ?? false,
-      };
-      isProgrammaticOrderUpdateRef.current = true;
-      slideForm.setFieldsValue({
-        id: nextId,
-        groupId: nextGroupId,
-        order: nextOrder,
-        name: nextState.name,
-        description: nextState.description,
-        status: nextState.status,
-        isVisible: nextState.isVisible,
-        isFeatured: nextState.isFeatured,
-      });
-      return nextState;
+    if (!stateChanged) {
+      return;
+    }
+
+    setCreateSlideState(nextState);
+    isProgrammaticOrderUpdateRef.current = true;
+    slideForm.setFieldsValue({
+      id: nextState.id,
+      groupId: nextState.groupId,
+      order: nextState.order,
+      name: nextState.name,
+      description: nextState.description,
+      status: nextState.status,
+      isVisible: nextState.isVisible,
+      isFeatured: nextState.isFeatured,
     });
   }, [
     availableSlideIdOptions,
@@ -228,17 +238,15 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
       return;
     }
 
-    setCreateGroupState((previous) => {
-      if (previous.order.trim().length > 0) {
-        return previous;
-      }
+    if (createGroupState.order.trim().length > 0) {
+      return;
+    }
 
-      const nextOrder = String(groupOrderMax);
-      const nextState = { ...previous, order: nextOrder };
-      groupForm.setFieldsValue({ order: nextOrder });
-      return nextState;
-    });
-  }, [createEntityType, groupForm, groupOrderMax]);
+    const nextOrder = String(groupOrderMax);
+    const nextState = { ...createGroupState, order: nextOrder };
+    setCreateGroupState(nextState);
+    groupForm.setFieldsValue({ order: nextOrder });
+  }, [createEntityType, createGroupState, groupForm, groupOrderMax]);
 
   const handleSlideValuesChange = (
     changedValues: Partial<CreateSlideFormValues>,
