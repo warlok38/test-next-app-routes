@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Empty, Layout, Tabs, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import type {
@@ -59,6 +59,7 @@ function AdminShellInner({
     syncActiveService,
     confirmServiceChange,
     slideDrafts,
+    slideValidation,
     fenceDrafts,
     setFenceDrafts,
     clearAllDrafts,
@@ -110,7 +111,35 @@ function AdminShellInner({
   const hasPendingFences = pendingFences.length > 0;
   const hasAnyPendingUpdates = hasPendingUpdates || hasPendingFences;
   const changedSlideIds = useMemo(() => pendingUpdates.map((item) => item.id), [pendingUpdates]);
+  const invalidPendingSlideIds = useMemo(
+    () =>
+      pendingUpdates
+        .map((item) => item.id)
+        .filter((slideId) => {
+          const validationState = slideValidation[slideId];
+          return Boolean(validationState && !validationState.isValid && validationState.errors.length);
+        }),
+    [pendingUpdates, slideValidation],
+  );
+  const invalidPendingSlideErrors = useMemo(
+    () =>
+      invalidPendingSlideIds.flatMap((slideId) => {
+        const validationState = slideValidation[slideId];
+        return validationState?.errors ?? [];
+      }),
+    [invalidPendingSlideIds, slideValidation],
+  );
   const isSaving = isSavingSlides || isSavingFences;
+  const [saveValidationAlert, setSaveValidationAlert] = useState<{
+    title: string;
+    details: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!invalidPendingSlideIds.length && saveValidationAlert) {
+      setSaveValidationAlert(null);
+    }
+  }, [invalidPendingSlideIds.length, saveValidationAlert]);
 
   const handlePendingFencesChange = useCallback(
     (nextFences: FenceUpdatePayload[]) => {
@@ -125,6 +154,18 @@ function AdminShellInner({
 
   const handleSaveChanges = async () => {
     if (!activeServiceId || !hasAnyPendingUpdates) {
+      return;
+    }
+
+    if (invalidPendingSlideIds.length) {
+      setSaveValidationAlert({
+        title: `Сохранение остановлено: исправьте ошибки в ${invalidPendingSlideIds.length} слайде(ах)`,
+        details: invalidPendingSlideErrors,
+      });
+      const firstInvalidSlideId = invalidPendingSlideIds[0];
+      if (firstInvalidSlideId) {
+        router.push(`/admin/${activeServiceId}/${firstInvalidSlideId}`);
+      }
       return;
     }
 
@@ -144,6 +185,7 @@ function AdminShellInner({
       }
 
       message.success('Изменения сохранены');
+      setSaveValidationAlert(null);
       clearAllDrafts();
     } catch (error) {
       const text = error instanceof Error ? error.message : 'Ошибка сохранения';
@@ -199,52 +241,70 @@ function AdminShellInner({
                 </Badge>
               ),
               children: (
-                <Layout style={{ minHeight: 'calc(100vh - 84px)' }}>
-                  <Sider
-                    theme="light"
-                    style={{
-                      flex: '0 0 380px',
-                      minWidth: 360,
-                      maxWidth: 460,
-                      width: 380,
-                    }}
-                  >
-                    <SlidesMenu
-                      slides={activeSlides}
-                      activeServiceId={activeServiceId}
-                      activeSlideId={activeSlideId}
-                      changedSlideIds={changedSlideIds}
-                      loading={slidesLoading}
-                      onCreate={() => {
-                        if (!activeServiceId) {
-                          return;
-                        }
-                        router.push(`/admin/${activeServiceId}/create`);
-                      }}
-                      onSelect={(nextSlideId) => {
-                        if (!activeServiceId) {
-                          return;
-                        }
-                        router.push(`/admin/${activeServiceId}/${nextSlideId}`);
-                      }}
+                <>
+                  {saveValidationAlert ? (
+                    <Alert
+                      style={{ marginBottom: 12 }}
+                      type="error"
+                      showIcon
+                      message={saveValidationAlert.title}
+                      description={
+                        saveValidationAlert.details.length
+                          ? Array.from(new Set(saveValidationAlert.details))
+                              .slice(0, 3)
+                              .join(' | ')
+                          : undefined
+                      }
                     />
-                  </Sider>
-                  <Content style={{ padding: 24, minWidth: 0 }}>
-                    {error ? (
-                      <Alert type="error" message={error} showIcon />
-                    ) : isCreatePage ? (
-                      <CreateEntityCard
-                        activeServiceId={activeServiceId}
+                  ) : null}
+                  <Layout style={{ minHeight: 'calc(100vh - 84px)' }}>
+                    <Sider
+                      theme="light"
+                      style={{
+                        flex: '0 0 380px',
+                        minWidth: 360,
+                        maxWidth: 460,
+                        width: 380,
+                      }}
+                    >
+                      <SlidesMenu
                         slides={activeSlides}
-                        commonSlides={commonSlides}
+                        activeServiceId={activeServiceId}
+                        activeSlideId={activeSlideId}
+                        changedSlideIds={changedSlideIds}
+                        invalidSlideIds={invalidPendingSlideIds}
+                        loading={slidesLoading}
+                        onCreate={() => {
+                          if (!activeServiceId) {
+                            return;
+                          }
+                          router.push(`/admin/${activeServiceId}/create`);
+                        }}
+                        onSelect={(nextSlideId) => {
+                          if (!activeServiceId) {
+                            return;
+                          }
+                          router.push(`/admin/${activeServiceId}/${nextSlideId}`);
+                        }}
                       />
-                    ) : activeSlide ? (
-                      <SlideEditor slide={activeSlide} key={activeSlide.id} />
-                    ) : (
-                      <Empty description="Выберите слайд из списка" />
-                    )}
-                  </Content>
-                </Layout>
+                    </Sider>
+                    <Content style={{ padding: 24, minWidth: 0 }}>
+                      {error ? (
+                        <Alert type="error" message={error} showIcon />
+                      ) : isCreatePage ? (
+                        <CreateEntityCard
+                          activeServiceId={activeServiceId}
+                          slides={activeSlides}
+                          commonSlides={commonSlides}
+                        />
+                      ) : activeSlide ? (
+                        <SlideEditor slide={activeSlide} key={activeSlide.id} />
+                      ) : (
+                        <Empty description="Выберите слайд из списка" />
+                      )}
+                    </Content>
+                  </Layout>
+                </>
               ),
             },
             {

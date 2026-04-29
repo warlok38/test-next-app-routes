@@ -15,18 +15,21 @@ type SlidesMenuProps = {
   activeServiceId?: string;
   activeSlideId?: string;
   changedSlideIds?: string[];
+  invalidSlideIds?: string[];
   loading?: boolean;
   onSelect: (slideId: string) => void;
   onCreate?: () => void;
 };
 
 const INDICATOR_COLOR = '#faad14';
+const INVALID_INDICATOR_COLOR = '#ff4d4f';
 
 export function SlidesMenu({
   slides,
   activeServiceId,
   activeSlideId,
   changedSlideIds = [],
+  invalidSlideIds = [],
   loading,
   onSelect,
   onCreate,
@@ -34,10 +37,11 @@ export function SlidesMenu({
   const { slidesMenuOpenKeys, setSlidesMenuOpenKeys, lastServiceIdForSlidesMenuRef } =
     useServiceContext();
   const changedSet = useMemo(() => new Set(changedSlideIds), [changedSlideIds]);
+  const invalidSet = useMemo(() => new Set(invalidSlideIds), [invalidSlideIds]);
 
   const menuItems = useMemo(
-    () => mapToMenuItems(slides, changedSet),
-    [slides, changedSet],
+    () => mapToMenuItems(slides, changedSet, invalidSet),
+    [slides, changedSet, invalidSet],
   );
 
   const parentKeys = useMemo(() => findParentKeys(slides, activeSlideId), [slides, activeSlideId]);
@@ -97,14 +101,21 @@ function sameKeyPaths(a: string[], b: string[]): boolean {
 function mapToMenuItems(
   items: Slide[],
   changedSet: ReadonlySet<string>,
+  invalidSet: ReadonlySet<string>,
 ): MenuItem[] {
   return items.map((slide) => {
     const changedCount = countChangedInTree(slide, changedSet);
+    const invalidCount = countChangedInTree(slide, invalidSet);
     const hasChildren = Boolean(slide.children?.length);
     const hasSelfChanges = changedSet.has(slide.id);
+    const hasSelfInvalid = invalidSet.has(slide.id);
 
     let indicator: ReactNode = null;
-    if (hasChildren && changedCount > 0) {
+    if (hasChildren && invalidCount > 0) {
+      indicator = <Badge mode="count" count={invalidCount} color={INVALID_INDICATOR_COLOR} />;
+    } else if (!hasChildren && hasSelfInvalid) {
+      indicator = <Badge mode="dot" color={INVALID_INDICATOR_COLOR} />;
+    } else if (hasChildren && changedCount > 0) {
       indicator = <Badge mode="count" count={changedCount} color={INDICATOR_COLOR} />;
     } else if (!hasChildren && hasSelfChanges) {
       indicator = <Badge mode="dot" color={INDICATOR_COLOR} />;
@@ -125,7 +136,9 @@ function mapToMenuItems(
           {indicator}
         </span>
       ),
-      children: slide.children?.length ? mapToMenuItems(slide.children, changedSet) : undefined,
+      children: slide.children?.length
+        ? mapToMenuItems(slide.children, changedSet, invalidSet)
+        : undefined,
     };
   });
 }

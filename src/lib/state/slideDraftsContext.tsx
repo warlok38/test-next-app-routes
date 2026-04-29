@@ -6,6 +6,13 @@ import type { ReactNode } from "react";
 import type { FenceUpdatePayload, SlideDraftPayload } from "@/lib/api/types";
 
 type SlideDraftMap = Record<string, SlideDraftPayload>;
+type SlideValidationMap = Record<
+  string,
+  {
+    isValid: boolean;
+    errors: string[];
+  }
+>;
 
 type ServiceContextValue = {
   activeServiceId: string | null;
@@ -21,6 +28,15 @@ type ServiceContextValue = {
   confirmServiceChange: (nextServiceId: string) => boolean;
   setSlideDraft: (slideId: string, fields: SlideDraftPayload) => void;
   removeSlideDraft: (slideId: string) => void;
+  slideValidation: SlideValidationMap;
+  setSlideValidation: (
+    slideId: string,
+    state: {
+      isValid: boolean;
+      errors: string[];
+    }
+  ) => void;
+  clearSlideValidation: (slideId: string) => void;
   setFenceDrafts: (fields: FenceUpdatePayload[]) => void;
   clearFenceDrafts: () => void;
   clearAllDrafts: () => void;
@@ -35,6 +51,7 @@ type ServiceProviderProps = {
 export function ServiceProvider({ children }: ServiceProviderProps) {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
   const [slideDrafts, setSlideDrafts] = useState<SlideDraftMap>({});
+  const [slideValidation, setSlideValidationState] = useState<SlideValidationMap>({});
   const [fenceDrafts, setFenceDrafts] = useState<FenceUpdatePayload[]>([]);
   const [slidesMenuOpenKeys, setSlidesMenuOpenKeys] = useState<string[]>([]);
   const lastServiceIdForSlidesMenuRef = useRef<string | undefined>(undefined);
@@ -49,6 +66,7 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
 
   const clearAllDrafts = useCallback(() => {
     setSlideDrafts({});
+    setSlideValidationState({});
     setFenceDrafts([]);
   }, []);
 
@@ -85,6 +103,56 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       delete next[slideId];
       return next;
     });
+    setSlideValidationState((previous) => {
+      if (!previous[slideId]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[slideId];
+      return next;
+    });
+  }, []);
+
+  const setSlideValidation = useCallback(
+    (
+      slideId: string,
+      state: {
+        isValid: boolean;
+        errors: string[];
+      }
+    ) => {
+      setSlideValidationState((previous) => {
+        const nextState = {
+          isValid: state.isValid,
+          errors: state.errors,
+        };
+        const current = previous[slideId];
+        if (
+          current &&
+          current.isValid === nextState.isValid &&
+          current.errors.length === nextState.errors.length &&
+          current.errors.every((error, index) => error === nextState.errors[index])
+        ) {
+          return previous;
+        }
+        return {
+          ...previous,
+          [slideId]: nextState,
+        };
+      });
+    },
+    []
+  );
+
+  const clearSlideValidation = useCallback((slideId: string) => {
+    setSlideValidationState((previous) => {
+      if (!previous[slideId]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[slideId];
+      return next;
+    });
   }, []);
 
   const clearFenceDrafts = useCallback(() => setFenceDrafts([]), []);
@@ -97,6 +165,7 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       hasSlideDrafts,
       hasFenceDrafts,
       hasUnsavedChanges,
+      slideValidation,
       slidesMenuOpenKeys,
       setSlidesMenuOpenKeys,
       lastServiceIdForSlidesMenuRef,
@@ -104,6 +173,8 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       confirmServiceChange,
       setSlideDraft,
       removeSlideDraft,
+      setSlideValidation,
+      clearSlideValidation,
       setFenceDrafts,
       clearFenceDrafts,
       clearAllDrafts,
@@ -118,9 +189,12 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       hasUnsavedChanges,
       clearFenceDrafts,
       slideDrafts,
+      slideValidation,
       setFenceDrafts,
       setSlideDraft,
       removeSlideDraft,
+      setSlideValidation,
+      clearSlideValidation,
       syncActiveService,
       slidesMenuOpenKeys,
     ]

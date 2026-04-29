@@ -1,11 +1,16 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Button, Card, Divider, Typography } from 'antd';
 import { Form } from '@/components/ui/Form/Form';
 import { Checkbox, Input, Select } from '@/components/ui/Form/controls';
 import type { Slide, SlideDraftPayload } from '@/lib/api/types';
 import type { SlideFormValues, SlideStatusOption } from '@/components/admin/slideEditorForm.types';
+import {
+  buildSlideFormValues,
+  SLIDE_VALIDATION_MESSAGES,
+  validateSlideFormValues,
+} from '@/components/admin/slideValidation';
 import { useServiceContext } from '@/lib/state/slideDraftsContext';
 
 type SlideEditorProps = {
@@ -20,45 +25,30 @@ const statusOptions: SlideStatusOption[] = [
 
 export function SlideEditor({ slide }: SlideEditorProps) {
   const [form] = Form.useForm<SlideFormValues>();
-  const { slideDrafts, setSlideDraft, removeSlideDraft } = useServiceContext();
-
-  const mergedSlide = useMemo(() => {
-    const draft = slideDrafts[slide.id];
-    return {
-      ...slide,
-      ...draft,
-    };
-  }, [slideDrafts, slide]);
+  const { slideDrafts, setSlideDraft, removeSlideDraft, setSlideValidation, clearSlideValidation } =
+    useServiceContext();
+  const draftForSlide = slideDrafts[slide.id];
 
   const initialValues = useMemo<SlideFormValues>(
-    () => ({
-      name: mergedSlide.name,
-      order: String(mergedSlide.order ?? 1),
-      description: mergedSlide.description ?? '',
-      status: mergedSlide.status ?? 'draft',
-      isVisible: Boolean(mergedSlide.isVisible),
-      isFeatured: Boolean(mergedSlide.isFeatured),
-    }),
-    [
-      mergedSlide.description,
-      mergedSlide.isFeatured,
-      mergedSlide.isVisible,
-      mergedSlide.name,
-      mergedSlide.order,
-      mergedSlide.status,
-    ],
+    () => buildSlideFormValues(slide, draftForSlide),
+    [draftForSlide, slide],
   );
 
   const baseValues = useMemo<SlideFormValues>(
-    () => ({
-      name: slide.name,
-      order: String(slide.order ?? 1),
-      description: slide.description ?? '',
-      status: slide.status ?? 'draft',
-      isVisible: Boolean(slide.isVisible),
-      isFeatured: Boolean(slide.isFeatured),
-    }),
-    [slide.description, slide.isFeatured, slide.isVisible, slide.name, slide.order, slide.status],
+    () => buildSlideFormValues(slide),
+    [slide],
+  );
+
+  const syncSlideValidation = useCallback(
+    (values: SlideFormValues) => {
+      const errors = validateSlideFormValues(values);
+      if (!errors.length) {
+        clearSlideValidation(slide.id);
+        return;
+      }
+      setSlideValidation(slide.id, { isValid: false, errors });
+    },
+    [clearSlideValidation, setSlideValidation, slide.id],
   );
 
   const onValuesChange = useCallback(
@@ -98,12 +88,20 @@ export function SlideEditor({ slide }: SlideEditorProps) {
       }
 
       setSlideDraft(slide.id, nextFields);
+      syncSlideValidation(allValues);
     },
-    [baseValues, removeSlideDraft, setSlideDraft, slide.id],
+    [baseValues, removeSlideDraft, setSlideDraft, slide.id, syncSlideValidation],
   );
 
-  const draftForSlide = slideDrafts[slide.id];
   const canResetSlide = Boolean(draftForSlide && Object.keys(draftForSlide).length > 0);
+
+  useEffect(() => {
+    if (!draftForSlide) {
+      clearSlideValidation(slide.id);
+      return;
+    }
+    syncSlideValidation(initialValues);
+  }, [clearSlideValidation, draftForSlide, initialValues, slide.id, syncSlideValidation]);
 
   const handleResetSlide = useCallback(() => {
     removeSlideDraft(slide.id);
@@ -127,7 +125,7 @@ export function SlideEditor({ slide }: SlideEditorProps) {
         <Form.Item<SlideFormValues, 'name'>
           name="name"
           label="Название"
-          rules={[{ required: true, message: 'Введите название' }]}
+          rules={[{ required: true, message: SLIDE_VALIDATION_MESSAGES.nameRequired }]}
         >
           <Input placeholder="Введите название слайда" />
         </Form.Item>
@@ -136,12 +134,12 @@ export function SlideEditor({ slide }: SlideEditorProps) {
           name="order"
           label="Порядок"
           rules={[
-            { required: true, message: 'Введите порядок' },
+            { required: true, message: SLIDE_VALIDATION_MESSAGES.orderRequired },
             {
               validator: (value) => {
                 const parsedOrder = Number(value);
                 if (!Number.isInteger(parsedOrder) || parsedOrder < 1) {
-                  return 'Порядок должен быть целым числом 1 или больше';
+                  return SLIDE_VALIDATION_MESSAGES.orderInvalid;
                 }
                 return undefined;
               },
