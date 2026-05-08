@@ -81,40 +81,64 @@ export function SlidesMenu({
   }, [activeServiceId, parentKeys, setSlidesMenuOpenKeys, lastServiceIdForSlidesMenuRef]);
 
   return (
-    <Spin spinning={Boolean(loading)}>
-      <div>
-        <div
-          style={{
-            margin: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <Typography.Title level={5} style={{ margin: 0, whiteSpace: 'nowrap' }}>
-            Слайды
-          </Typography.Title>
-          <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <Tooltip title="Создать группу или слайд">
-              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={onCreate} disabled={!activeServiceId}>
-                Добавить
-              </Button>
-            </Tooltip>
-          </span>
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={activeSlideId ? [activeSlideId] : []}
-          openKeys={slidesMenuOpenKeys}
-          onOpenChange={(keys) => setSlidesMenuOpenKeys(keys as string[])}
-          items={menuItems}
-          sortable
-          onReorder={handleReorder}
-          onClick={(item) => onSelect(item.key)}
-        />
+    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          margin: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          flexShrink: 0,
+        }}
+      >
+        <Typography.Title level={5} style={{ margin: 0, whiteSpace: 'nowrap' }}>
+          Слайды
+        </Typography.Title>
+        <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <Tooltip title="Создать группу или слайд">
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={onCreate}
+              disabled={!activeServiceId}
+            >
+              Добавить
+            </Button>
+          </Tooltip>
+        </span>
       </div>
-    </Spin>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ height: '100%', minHeight: 0 }}>
+          <Menu
+            mode="inline"
+            selectedKeys={activeSlideId ? [activeSlideId] : []}
+            openKeys={slidesMenuOpenKeys}
+            onOpenChange={(keys) => setSlidesMenuOpenKeys(keys as string[])}
+            items={menuItems}
+            sortable
+            onReorder={handleReorder}
+            onClick={(item) => onSelect(item.key)}
+          />
+        </div>
+        {loading ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(255, 255, 255, 0.55)',
+              pointerEvents: 'none',
+            }}
+          >
+            <Spin size="small" />
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

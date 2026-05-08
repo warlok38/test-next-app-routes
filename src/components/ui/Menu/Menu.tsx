@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -425,15 +425,9 @@ export const Menu: React.FC<MenuProps> = ({
     }
 
     const menuRect = menuElement.getBoundingClientRect();
-    const pointerEvent = event.activatorEvent;
-    const pointerX =
-      pointerEvent instanceof PointerEvent
-        ? pointerEvent.clientX
-        : translatedRect.left + translatedRect.width / 2;
-    const pointerY =
-      pointerEvent instanceof PointerEvent
-        ? pointerEvent.clientY
-        : translatedRect.top + translatedRect.height / 2;
+    // translatedRect обновляется на каждом move и даёт актуальные координаты dragged overlay
+    const pointerX = translatedRect.left + translatedRect.width / 2;
+    const pointerY = translatedRect.top + translatedRect.height / 2;
 
     if (
       pointerX < menuRect.left ||
@@ -449,13 +443,11 @@ export const Menu: React.FC<MenuProps> = ({
       return;
     }
 
-    const activeContainerId = event.active.data.current?.containerId;
-    const isNestedContainer = Boolean(activeContainerId && activeContainerId !== '__root__');
     const topDistance = pointerY - menuRect.top;
     const bottomDistance = menuRect.bottom - pointerY;
     let scrollDelta = 0;
 
-    if (!isNestedContainer && topDistance < AUTO_SCROLL_EDGE_PX && menuElement.scrollTop > 0) {
+    if (topDistance < AUTO_SCROLL_EDGE_PX && menuElement.scrollTop > 0) {
       scrollDelta = -getAutoScrollStep(topDistance);
     } else if (bottomDistance < AUTO_SCROLL_EDGE_PX && menuElement.scrollTop < maxScrollTop) {
       scrollDelta = getAutoScrollStep(bottomDistance);
@@ -467,6 +459,43 @@ export const Menu: React.FC<MenuProps> = ({
 
     menuElement.scrollTop = clamp(menuElement.scrollTop + scrollDelta, 0, maxScrollTop);
   }, []);
+
+  useEffect(() => {
+    if (!activeDragId) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      const menuElement = menuRef.current;
+      if (!menuElement || event.deltaY === 0) {
+        return;
+      }
+
+      const menuRect = menuElement.getBoundingClientRect();
+      const isInsideMenu =
+        event.clientX >= menuRect.left &&
+        event.clientX <= menuRect.right &&
+        event.clientY >= menuRect.top &&
+        event.clientY <= menuRect.bottom;
+
+      if (!isInsideMenu) {
+        return;
+      }
+
+      const maxScrollTop = menuElement.scrollHeight - menuElement.clientHeight;
+      if (maxScrollTop <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+      menuElement.scrollTop = clamp(menuElement.scrollTop + event.deltaY, 0, maxScrollTop);
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+    };
+  }, [activeDragId]);
 
   const collisionDetection: CollisionDetection = (args) => {
     const activeContainerId = args.active.data.current?.containerId;
