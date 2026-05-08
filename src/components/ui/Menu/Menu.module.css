@@ -1,9 +1,24 @@
 .menu {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+}
+
+.menuDragging {
+  overscroll-behavior: contain;
+  user-select: none;
+}
+
+.menuDragging .dragHandle {
+  cursor: grabbing;
+}
+
+.menuDragging .subMenu {
+  transition: none;
 }
 
 .menu::-webkit-scrollbar {
@@ -27,8 +42,31 @@
 }
 
 .dragging {
-  opacity: 0.7;
-  z-index: 2;
+  opacity: 0.78;
+  z-index: 3;
+}
+
+.menuItemWrapper.dragging .subMenu,
+.menuGroup.dragging .groupChildren {
+  max-height: 0;
+  overflow: hidden;
+}
+
+.menuItemWrapper.dragging .menuItem,
+.menuGroup.dragging .groupLabel {
+  background-color: #f5f7ff;
+}
+
+.dragOverlayItem {
+  pointer-events: none;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  background-color: #fff;
+  opacity: 0.98;
+}
+
+.dragOverlayRow {
+  box-sizing: border-box;
 }
 
 .menuItem {

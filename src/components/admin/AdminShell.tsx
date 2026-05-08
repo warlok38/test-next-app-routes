@@ -261,7 +261,7 @@ function AdminShellInner({
                 </Badge>
               ),
               children: (
-                <Layout style={{ minHeight: 'calc(100vh - 84px)' }}>
+                <Layout style={{ minHeight: 'calc(100vh - 84px)', minWidth: 0 }}>
                   <Sider
                     theme="light"
                     style={{
@@ -269,6 +269,8 @@ function AdminShellInner({
                       minWidth: 360,
                       maxWidth: 460,
                       width: 380,
+                      minHeight: 0,
+                      overflow: 'hidden',
                     }}
                   >
                     <SlidesMenu
