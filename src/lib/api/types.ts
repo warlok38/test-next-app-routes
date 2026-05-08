@@ -21,6 +21,20 @@ export type Slide = {
   children?: Slide[];
 };
 
+export type CommonSlide = Omit<Slide, "serviceId" | "children"> & {
+  children?: CommonSlide[];
+};
+
+export type ServiceSlideOverride = {
+  serviceId: string;
+  slideId: string;
+  name?: string;
+  order?: number;
+  isVisible?: boolean;
+};
+
+export type ResolvedSlide = Slide;
+
 export type GroupListItem = {
   id: string;
   name: string;

@@ -56,4 +56,9 @@ export const SLIDES_MAP: Record<string, SlideMapEntry> = {
   'a-6-8': { slide: <Slides.AnalyticsA6_8Slide /> },
   'a-6-9': { slide: <Slides.AnalyticsA6_9Slide /> },
   'a-6-10': { slide: <Slides.AnalyticsA6_10Slide /> },
+  'b-1': { slide: <Slides.BillingB1Slide /> },
+  'b-2': { slide: <Slides.BillingB2Slide /> },
+  's-1': { slide: <Slides.SupportS1Slide /> },
+  's-2': { slide: <Slides.SupportS2Slide /> },
+  test: { slide: <div>test</div> },
 };

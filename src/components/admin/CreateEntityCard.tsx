@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Space, Tabs, Typography, message } from 'antd';
+import { Button, Card, Divider, Space, Tabs, Typography, message } from 'antd';
 import { useRouter } from 'next/navigation';
 import { SLIDES_MAP } from '@/constants/slides';
 import type {
+  CommonSlide,
   GroupCreateRequest,
   GroupListItem,
   Slide,
@@ -25,6 +26,7 @@ import { Checkbox, Input, Select } from '@/components/ui/Form/controls';
 type CreateEntityCardProps = {
   activeServiceId?: string;
   slides: Slide[];
+  commonSlides: CommonSlide[];
 };
 
 type CreateEntityType = 'group' | 'slide';
@@ -64,7 +66,7 @@ const STATUS_OPTIONS: Array<{ value: SlideStatus; label: string }> = [
 
 const NO_GROUP_VALUE = '__NO_GROUP__';
 
-export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardProps) {
+export function CreateEntityCard({ activeServiceId, slides, commonSlides }: CreateEntityCardProps) {
   const router = useRouter();
   const [createGroup, { isLoading: isCreatingGroup }] = useCreateGroupMutation();
   const [createSlide, { isLoading: isCreatingSlide }] = useCreateSlideMutation();
@@ -90,6 +92,7 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   });
   const isOrderManuallyEditedRef = useRef(false);
   const isProgrammaticOrderUpdateRef = useRef(false);
+  const createSlideStateRef = useRef(createSlideState);
 
   const isCreating = isCreatingGroup || isCreatingSlide;
   const slideMap = useMemo(
@@ -99,6 +102,14 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
         return acc;
       }, {}),
     [slides],
+  );
+  const commonSlidesMap = useMemo(
+    () =>
+      commonSlides.reduce<Record<string, CommonSlide>>((acc, item) => {
+        acc[item.id] = item;
+        return acc;
+      }, {}),
+    [commonSlides],
   );
 
   const allSlideIds = useMemo(
@@ -148,65 +159,94 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
   );
   const slideCountOnLevel = Math.max(0, slideOrderMax - 1);
   const slideOrderLabel = `Порядок (текущий уровень: ${slideCountOnLevel}; диапазон: 1..${slideOrderMax})`;
+
+  useEffect(() => {
+    createSlideStateRef.current = createSlideState;
+  }, [createSlideState]);
+
   useEffect(() => {
     if (createEntityType !== 'slide') {
       return;
     }
 
-    setCreateSlideState((previous) => {
-      const nextId =
-        previous.id && availableSlideIdSet.has(previous.id)
-          ? previous.id
-          : (availableSlideIdOptions[0]?.value ?? '');
-      const nextGroupId =
-        previous.groupId &&
-        (previous.groupId === NO_GROUP_VALUE ||
-          groupOptions.some((groupOption) => groupOption.value === previous.groupId))
-          ? previous.groupId
-          : NO_GROUP_VALUE;
-      const defaultOrder = String(getNextOrderOnLevel(slides, normalizeGroupId(nextGroupId)));
-      const shouldKeepManualOrder =
-        isOrderManuallyEditedRef.current &&
-        previous.groupId === nextGroupId &&
-        previous.order.trim().length > 0;
-      const nextOrder = shouldKeepManualOrder ? previous.order : defaultOrder;
+    const previous = createSlideStateRef.current;
+    const nextId =
+      previous.id && availableSlideIdSet.has(previous.id)
+        ? previous.id
+        : (availableSlideIdOptions[0]?.value ?? '');
+    const nextGroupId =
+      previous.groupId &&
+      (previous.groupId === NO_GROUP_VALUE ||
+        groupOptions.some((groupOption) => groupOption.value === previous.groupId))
+        ? previous.groupId
+        : NO_GROUP_VALUE;
+    const defaultOrder = String(getNextOrderOnLevel(slides, normalizeGroupId(nextGroupId)));
+    const shouldKeepManualOrder =
+      isOrderManuallyEditedRef.current &&
+      previous.groupId === nextGroupId &&
+      previous.order.trim().length > 0;
+    const nextOrder = shouldKeepManualOrder ? previous.order : defaultOrder;
 
-      if (previous.groupId !== nextGroupId) {
-        isOrderManuallyEditedRef.current = false;
-      }
+    if (previous.groupId !== nextGroupId) {
+      isOrderManuallyEditedRef.current = false;
+    }
 
-      if (previous.id === nextId && previous.groupId === nextGroupId && previous.order === nextOrder) {
-        return previous;
-      }
+    const nextState = {
+      ...previous,
+      id: nextId,
+      groupId: nextGroupId,
+      order: nextOrder,
+      name: commonSlidesMap[nextId]?.name ?? '',
+      description: commonSlidesMap[nextId]?.description ?? '',
+      status: commonSlidesMap[nextId]?.status ?? 'draft',
+      isVisible: commonSlidesMap[nextId]?.isVisible ?? true,
+      isFeatured: commonSlidesMap[nextId]?.isFeatured ?? false,
+    };
+    const stateChanged =
+      previous.id !== nextState.id ||
+      previous.groupId !== nextState.groupId ||
+      previous.order !== nextState.order;
 
-      const nextState = {
-        ...previous,
-        id: nextId,
-        groupId: nextGroupId,
-        order: nextOrder,
-      };
-      isProgrammaticOrderUpdateRef.current = true;
-      slideForm.setFieldsValue({ id: nextId, groupId: nextGroupId, order: nextOrder });
-      return nextState;
+    if (!stateChanged) {
+      return;
+    }
+
+    setCreateSlideState(nextState);
+    isProgrammaticOrderUpdateRef.current = true;
+    slideForm.setFieldsValue({
+      id: nextState.id,
+      groupId: nextState.groupId,
+      order: nextState.order,
+      name: nextState.name,
+      description: nextState.description,
+      status: nextState.status,
+      isVisible: nextState.isVisible,
+      isFeatured: nextState.isFeatured,
     });
-  }, [availableSlideIdOptions, availableSlideIdSet, createEntityType, groupOptions, slideForm, slides]);
+  }, [
+    availableSlideIdOptions,
+    availableSlideIdSet,
+    commonSlidesMap,
+    createEntityType,
+    groupOptions,
+    slideForm,
+    slides,
+  ]);
 
   useEffect(() => {
     if (createEntityType !== 'group') {
       return;
     }
 
-    setCreateGroupState((previous) => {
-      if (previous.order.trim().length > 0) {
-        return previous;
-      }
+    if (createGroupState.order.trim().length > 0) {
+      return;
+    }
 
-      const nextOrder = String(groupOrderMax);
-      const nextState = { ...previous, order: nextOrder };
-      groupForm.setFieldsValue({ order: nextOrder });
-      return nextState;
-    });
-  }, [createEntityType, groupForm, groupOrderMax]);
+    const nextOrder = String(groupOrderMax);
+    const nextState = { ...createGroupState, order: nextOrder };
+    setCreateGroupState(nextState);
+    groupForm.setFieldsValue({ order: nextOrder });
+  }, [createEntityType, createGroupState, groupForm, groupOrderMax]);
 
   const handleSlideValuesChange = (
     changedValues: Partial<CreateSlideFormValues>,
@@ -231,6 +271,47 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
       isProgrammaticOrderUpdateRef.current = true;
       setCreateSlideState(nextValues);
       slideForm.setFieldsValue({ order: nextOrder });
+      return;
+    }
+
+    if (changedValues.id !== undefined) {
+      const commonSlide = commonSlidesMap[values.id];
+      if (commonSlide) {
+        const nextValues = {
+          ...values,
+          name: commonSlide.name ?? '',
+          description: commonSlide.description ?? '',
+          status: commonSlide.status ?? values.status,
+          isVisible: commonSlide.isVisible ?? true,
+          isFeatured: commonSlide.isFeatured ?? false,
+        };
+        setCreateSlideState(nextValues);
+        slideForm.setFieldsValue({
+          name: nextValues.name,
+          description: nextValues.description,
+          status: nextValues.status,
+          isVisible: nextValues.isVisible,
+          isFeatured: nextValues.isFeatured,
+        });
+        return;
+      }
+
+      const nextValues = {
+        ...values,
+        name: '',
+        description: '',
+        status: 'draft' as SlideStatus,
+        isVisible: true,
+        isFeatured: false,
+      };
+      setCreateSlideState(nextValues);
+      slideForm.setFieldsValue({
+        name: nextValues.name,
+        description: nextValues.description,
+        status: nextValues.status,
+        isVisible: nextValues.isVisible,
+        isFeatured: nextValues.isFeatured,
+      });
       return;
     }
 
@@ -421,15 +502,7 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
                   >
                     <Input placeholder="Введите название слайда" />
                   </Form.Item>
-                  <Form.Item<CreateSlideFormValues, 'description'>
-                    name="description"
-                    label="Описание"
-                  >
-                    <Input.TextArea placeholder="Введите описание" rows={4} />
-                  </Form.Item>
-                  <Form.Item<CreateSlideFormValues, 'status'> name="status" label="Статус">
-                    <Select options={STATUS_OPTIONS} />
-                  </Form.Item>
+                  <Typography.Text strong>Сервисные поля</Typography.Text>
                   <Form.Item<CreateSlideFormValues, 'order'>
                     name="order"
                     label={slideOrderLabel}
@@ -445,6 +518,22 @@ export function CreateEntityCard({ activeServiceId, slides }: CreateEntityCardPr
                     valuePropName="checked"
                   >
                     <Checkbox>Виден пользователям</Checkbox>
+                  </Form.Item>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <Space align="center" size={8}>
+                    <Typography.Text strong>Общие поля</Typography.Text>
+                  </Space>
+                  <Form.Item<CreateSlideFormValues, 'description'>
+                    name="description"
+                    label="Описание"
+                  >
+                    <Input.TextArea
+                      placeholder="Введите описание"
+                      rows={4}
+                    />
+                  </Form.Item>
+                  <Form.Item<CreateSlideFormValues, 'status'> name="status" label="Статус">
+                    <Select options={STATUS_OPTIONS} />
                   </Form.Item>
                   <Form.Item<CreateSlideFormValues, 'isFeatured'>
                     name="isFeatured"
