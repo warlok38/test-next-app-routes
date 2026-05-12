@@ -10,7 +10,7 @@ import { useServiceContext } from '@/lib/state/slideDraftsContext';
 
 type SlideEditorProps = {
   slide: Slide;
-  onResetOrderLevel?: (slideId: string) => void;
+  onResetOrderConnected?: (slideId: string) => void;
   onOrderInputChange?: (slideId: string, nextOrder: number) => void;
 };
 
@@ -20,7 +20,7 @@ const statusOptions: SlideStatusOption[] = [
   { value: 'published', label: 'Published' },
 ];
 
-export function SlideEditor({ slide, onResetOrderLevel, onOrderInputChange }: SlideEditorProps) {
+export function SlideEditor({ slide, onResetOrderConnected, onOrderInputChange }: SlideEditorProps) {
   const [form] = Form.useForm<SlideFormValues>();
   const { slideDrafts, setSlideDraft, removeSlideDraft } = useServiceContext();
   const [hasOrderInputDeviation, setHasOrderInputDeviation] = useState(false);
@@ -138,10 +138,10 @@ export function SlideEditor({ slide, onResetOrderLevel, onOrderInputChange }: Sl
 
   const handleResetSlide = useCallback(() => {
     setHasOrderInputDeviation(false);
-    onResetOrderLevel?.(slide.id);
+    onResetOrderConnected?.(slide.id);
     removeSlideDraft(slide.id);
     form.resetFields();
-  }, [form, onResetOrderLevel, removeSlideDraft, slide.id]);
+  }, [form, onResetOrderConnected, removeSlideDraft, slide.id]);
 
   return (
     <Card

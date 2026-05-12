@@ -22,6 +22,11 @@ import {
   useUpdateFencesByServiceIdMutation,
   useUpdateSlidesByServiceIdMutation,
 } from '@/lib/store/adminApi';
+import {
+  collectConnectedOrderComponent,
+  compareByOrder,
+  findLevelBySlideId,
+} from '@/lib/slides/order';
 import { findSlideById, flattenSlides } from '@/lib/slides/tree';
 
 const { Sider, Content } = Layout;
@@ -228,15 +233,22 @@ function AdminShellInner({
     [applyOrderUpdates, effectiveSlides],
   );
 
-  const handleResetOrderLevel = useCallback(
+  const handleResetOrderConnectedComponent = useCallback(
     (slideId: string) => {
-      const levelSlides = findLevelBySlideId(activeSlides, slideId);
-      if (!levelSlides) {
+      const baseLevel = findLevelBySlideId(activeSlides, slideId);
+      const effectiveLevel = findLevelBySlideId(effectiveSlides, slideId);
+      if (!baseLevel || !effectiveLevel) {
         return;
       }
 
-      levelSlides.forEach((item) => {
-        const currentDraft = slideDrafts[item.id];
+      const connectedIds = collectConnectedOrderComponent({
+        selectedId: slideId,
+        baseLevel: [...baseLevel].sort(compareByOrder),
+        effectiveLevel: [...effectiveLevel].sort(compareByOrder),
+      });
+
+      connectedIds.forEach((id) => {
+        const currentDraft = slideDrafts[id];
         if (!currentDraft || typeof currentDraft.order !== 'number') {
           return;
         }
@@ -244,13 +256,13 @@ function AdminShellInner({
         const nextDraft = { ...currentDraft };
         delete nextDraft.order;
         if (Object.keys(nextDraft).length > 0) {
-          replaceSlideDraft(item.id, nextDraft);
+          replaceSlideDraft(id, nextDraft);
           return;
         }
-        removeSlideDraft(item.id);
+        removeSlideDraft(id);
       });
     },
-    [activeSlides, removeSlideDraft, replaceSlideDraft, slideDrafts],
+    [activeSlides, effectiveSlides, removeSlideDraft, replaceSlideDraft, slideDrafts],
   );
 
   return (
@@ -355,7 +367,7 @@ function AdminShellInner({
                       <SlideEditor
                         slide={activeSlide}
                         key={activeSlide.id}
-                        onResetOrderLevel={handleResetOrderLevel}
+                        onResetOrderConnected={handleResetOrderConnectedComponent}
                         onOrderInputChange={handleSlideOrderInputChange}
                       />
                     ) : (
@@ -399,25 +411,6 @@ export function AdminShell(props: AdminShellProps) {
   return <AdminShellInner {...props} />;
 }
 
-function findLevelBySlideId(items: Slide[], slideId: string): Slide[] | null {
-  if (items.some((item) => item.id === slideId)) {
-    return items;
-  }
-
-  for (const item of items) {
-    if (!item.children?.length) {
-      continue;
-    }
-
-    const nestedLevel = findLevelBySlideId(item.children, slideId);
-    if (nestedLevel) {
-      return nestedLevel;
-    }
-  }
-
-  return null;
-}
-
 function applyOrderDrafts(items: Slide[], orderDrafts: Record<string, number>): Slide[] {
   return [...items]
     .map((item) => ({
@@ -426,13 +419,6 @@ function applyOrderDrafts(items: Slide[], orderDrafts: Record<string, number>): 
       children: item.children?.length ? applyOrderDrafts(item.children, orderDrafts) : undefined,
     }))
     .sort(compareByOrder);
-}
-
-function compareByOrder(left: Slide, right: Slide): number {
-  if (left.order === right.order) {
-    return left.name.localeCompare(right.name, 'ru');
-  }
-  return left.order - right.order;
 }
 
 function move<T>(items: T[], from: number, to: number): T[] {
