@@ -20,6 +20,7 @@ type ServiceContextValue = {
   syncActiveService: (nextServiceId: string) => void;
   confirmServiceChange: (nextServiceId: string) => boolean;
   setSlideDraft: (slideId: string, fields: SlideDraftPayload) => void;
+  replaceSlideDraft: (slideId: string, fields: SlideDraftPayload) => void;
   removeSlideDraft: (slideId: string) => void;
   setFenceDrafts: (fields: FenceUpdatePayload[]) => void;
   clearFenceDrafts: () => void;
@@ -71,6 +72,16 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
   const setSlideDraft = useCallback((slideId: string, fields: SlideDraftPayload) => {
     setSlideDrafts((previous) => ({
       ...previous,
+      [slideId]: {
+        ...(previous[slideId] ?? {}),
+        ...fields,
+      },
+    }));
+  }, []);
+
+  const replaceSlideDraft = useCallback((slideId: string, fields: SlideDraftPayload) => {
+    setSlideDrafts((previous) => ({
+      ...previous,
       [slideId]: fields,
     }));
   }, []);
@@ -103,6 +114,7 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       syncActiveService,
       confirmServiceChange,
       setSlideDraft,
+      replaceSlideDraft,
       removeSlideDraft,
       setFenceDrafts,
       clearFenceDrafts,
@@ -120,6 +132,7 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       slideDrafts,
       setFenceDrafts,
       setSlideDraft,
+      replaceSlideDraft,
       removeSlideDraft,
       syncActiveService,
       slidesMenuOpenKeys,

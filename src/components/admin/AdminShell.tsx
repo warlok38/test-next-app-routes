@@ -59,7 +59,7 @@ function AdminShellInner({
     syncActiveService,
     confirmServiceChange,
     slideDrafts,
-    setSlideDraft,
+    replaceSlideDraft,
     removeSlideDraft,
     fenceDrafts,
     setFenceDrafts,
@@ -121,6 +121,10 @@ function AdminShellInner({
       ) as Record<string, number>,
     [slideDrafts],
   );
+  const effectiveSlides = useMemo(
+    () => applyOrderDrafts(activeSlides, orderDrafts),
+    [activeSlides, orderDrafts],
+  );
   const isSaving = isSavingSlides || isSavingFences;
 
   const handlePendingFencesChange = useCallback(
@@ -162,7 +166,7 @@ function AdminShellInner({
     }
   };
 
-  const handleSlidesReorder = useCallback(
+  const applyOrderUpdates = useCallback(
     (updates: Array<{ id: string; order: number }>) => {
       updates.forEach(({ id, order }) => {
         const sourceSlide = slideMap[id];
@@ -179,13 +183,49 @@ function AdminShellInner({
         }
 
         if (Object.keys(nextDraft).length > 0) {
-          setSlideDraft(id, nextDraft);
+          replaceSlideDraft(id, nextDraft);
           return;
         }
         removeSlideDraft(id);
       });
     },
-    [removeSlideDraft, setSlideDraft, slideDrafts, slideMap],
+    [removeSlideDraft, replaceSlideDraft, slideDrafts, slideMap],
+  );
+
+  const handleSlidesReorder = useCallback(
+    (updates: Array<{ id: string; order: number }>) => {
+      applyOrderUpdates(updates);
+    },
+    [applyOrderUpdates],
+  );
+
+  const handleSlideOrderInputChange = useCallback(
+    (slideId: string, targetOrder: number) => {
+      const levelSlides = findLevelBySlideId(effectiveSlides, slideId);
+      if (!levelSlides?.length) {
+        return;
+      }
+
+      const orderedLevel = [...levelSlides].sort(compareByOrder);
+      const currentIndex = orderedLevel.findIndex((item) => item.id === slideId);
+      if (currentIndex === -1) {
+        return;
+      }
+
+      const targetIndex = clamp(targetOrder - 1, 0, orderedLevel.length - 1);
+      if (currentIndex === targetIndex) {
+        return;
+      }
+
+      const reorderedLevel = move(orderedLevel, currentIndex, targetIndex);
+      applyOrderUpdates(
+        reorderedLevel.map((slide, index) => ({
+          id: slide.id,
+          order: index + 1,
+        })),
+      );
+    },
+    [applyOrderUpdates, effectiveSlides],
   );
 
   const handleResetOrderLevel = useCallback(
@@ -204,13 +244,13 @@ function AdminShellInner({
         const nextDraft = { ...currentDraft };
         delete nextDraft.order;
         if (Object.keys(nextDraft).length > 0) {
-          setSlideDraft(item.id, nextDraft);
+          replaceSlideDraft(item.id, nextDraft);
           return;
         }
         removeSlideDraft(item.id);
       });
     },
-    [activeSlides, removeSlideDraft, setSlideDraft, slideDrafts],
+    [activeSlides, removeSlideDraft, replaceSlideDraft, slideDrafts],
   );
 
   return (
@@ -316,6 +356,7 @@ function AdminShellInner({
                         slide={activeSlide}
                         key={activeSlide.id}
                         onResetOrderLevel={handleResetOrderLevel}
+                        onOrderInputChange={handleSlideOrderInputChange}
                       />
                     ) : (
                       <Empty description="Выберите слайд из списка" />
@@ -375,4 +416,32 @@ function findLevelBySlideId(items: Slide[], slideId: string): Slide[] | null {
   }
 
   return null;
+}
+
+function applyOrderDrafts(items: Slide[], orderDrafts: Record<string, number>): Slide[] {
+  return [...items]
+    .map((item) => ({
+      ...item,
+      order: typeof orderDrafts[item.id] === 'number' ? orderDrafts[item.id] : item.order,
+      children: item.children?.length ? applyOrderDrafts(item.children, orderDrafts) : undefined,
+    }))
+    .sort(compareByOrder);
+}
+
+function compareByOrder(left: Slide, right: Slide): number {
+  if (left.order === right.order) {
+    return left.name.localeCompare(right.name, 'ru');
+  }
+  return left.order - right.order;
+}
+
+function move<T>(items: T[], from: number, to: number): T[] {
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

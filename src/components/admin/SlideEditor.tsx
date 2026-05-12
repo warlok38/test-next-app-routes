@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Divider, Typography } from 'antd';
 import { Form } from '@/components/ui/Form/Form';
 import { Checkbox, Input, Select } from '@/components/ui/Form/controls';
@@ -11,6 +11,7 @@ import { useServiceContext } from '@/lib/state/slideDraftsContext';
 type SlideEditorProps = {
   slide: Slide;
   onResetOrderLevel?: (slideId: string) => void;
+  onOrderInputChange?: (slideId: string, nextOrder: number) => void;
 };
 
 const statusOptions: SlideStatusOption[] = [
@@ -19,9 +20,10 @@ const statusOptions: SlideStatusOption[] = [
   { value: 'published', label: 'Published' },
 ];
 
-export function SlideEditor({ slide, onResetOrderLevel }: SlideEditorProps) {
+export function SlideEditor({ slide, onResetOrderLevel, onOrderInputChange }: SlideEditorProps) {
   const [form] = Form.useForm<SlideFormValues>();
   const { slideDrafts, setSlideDraft, removeSlideDraft } = useServiceContext();
+  const [hasOrderInputDeviation, setHasOrderInputDeviation] = useState(false);
 
   const mergedSlide = useMemo(() => {
     const draft = slideDrafts[slide.id];
@@ -63,24 +65,31 @@ export function SlideEditor({ slide, onResetOrderLevel }: SlideEditorProps) {
   );
 
   const onValuesChange = useCallback(
-    (_: Partial<SlideFormValues>, allValues: SlideFormValues) => {
+    (changedValues: Partial<SlideFormValues>, allValues: SlideFormValues) => {
+      const isOrderChanged = Object.prototype.hasOwnProperty.call(changedValues, 'order');
+      if (isOrderChanged) {
+        const orderInput = String(allValues.order ?? '');
+        setHasOrderInputDeviation(orderInput !== initialValues.order);
+
+        const parsedOrder = Number(orderInput);
+        const parsedCurrentOrder = Number(initialValues.order);
+        if (
+          Number.isInteger(parsedOrder) &&
+          parsedOrder >= 1 &&
+          Number.isInteger(parsedCurrentOrder) &&
+          parsedOrder !== parsedCurrentOrder
+        ) {
+          onOrderInputChange?.(slide.id, parsedOrder);
+        }
+      }
+
       const draftKeys = Object.keys(baseValues) as Array<keyof SlideFormValues>;
 
       const nextFields = draftKeys.reduce<SlideDraftPayload>((acc, field) => {
         const nextValue = allValues[field];
         const baseValue = baseValues[field];
         if (field === 'order') {
-          const parsedOrder = Number(nextValue);
-          const parsedBaseOrder = Number(baseValue);
-          if (
-            !Number.isInteger(parsedOrder) ||
-            parsedOrder < 1 ||
-            Number.isNaN(parsedBaseOrder) ||
-            parsedOrder === parsedBaseOrder
-          ) {
-            return acc;
-          }
-          return { ...acc, order: parsedOrder };
+          return acc;
         }
 
         if (nextValue === baseValue) {
@@ -93,23 +102,46 @@ export function SlideEditor({ slide, onResetOrderLevel }: SlideEditorProps) {
         } as SlideDraftPayload;
       }, {});
 
+      const hasOrderDraft = typeof slideDrafts[slide.id]?.order === 'number';
       if (!Object.keys(nextFields).length) {
+        if (isOrderChanged) {
+          return;
+        }
+        if (hasOrderDraft || hasOrderInputDeviation) {
+          return;
+        }
         removeSlideDraft(slide.id);
         return;
       }
 
       setSlideDraft(slide.id, nextFields);
     },
-    [baseValues, removeSlideDraft, setSlideDraft, slide.id],
+    [
+      baseValues,
+      hasOrderInputDeviation,
+      initialValues.order,
+      onOrderInputChange,
+      removeSlideDraft,
+      setSlideDraft,
+      slide.id,
+      slideDrafts,
+    ],
   );
 
+  useEffect(() => {
+    setHasOrderInputDeviation(false);
+  }, [initialValues.order, slide.id]);
+
   const draftForSlide = slideDrafts[slide.id];
-  const canResetSlide = Boolean(draftForSlide && Object.keys(draftForSlide).length > 0);
+  const canResetSlide =
+    Boolean(draftForSlide && Object.keys(draftForSlide).length > 0) || hasOrderInputDeviation;
 
   const handleResetSlide = useCallback(() => {
+    setHasOrderInputDeviation(false);
     onResetOrderLevel?.(slide.id);
     removeSlideDraft(slide.id);
-  }, [onResetOrderLevel, removeSlideDraft, slide.id]);
+    form.resetFields();
+  }, [form, onResetOrderLevel, removeSlideDraft, slide.id]);
 
   return (
     <Card
