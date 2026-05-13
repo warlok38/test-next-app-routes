@@ -170,7 +170,7 @@ export const adminApi = createApi({
           };
         }
       },
-      invalidatesTags: ['Groups'],
+      invalidatesTags: ['Groups', 'Slides'],
     }),
     updateGroup: builder.mutation<GroupListItem[], GroupUpdateRequest[]>({
       queryFn: async (payload) => {
@@ -186,7 +186,7 @@ export const adminApi = createApi({
           };
         }
       },
-      invalidatesTags: ['Groups'],
+      invalidatesTags: ['Groups', 'Slides'],
     }),
     createSlide: builder.mutation<Slide, SlideCreateRequest>({
       queryFn: async (payload) => {
