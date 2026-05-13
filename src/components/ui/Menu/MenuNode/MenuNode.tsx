@@ -3,6 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import cn from 'classnames';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { MenuLevel } from '../MenuLevel';
 import styles from '../Menu.module.css';
 import type { MenuNodeProps } from '../types';
@@ -51,11 +52,15 @@ export function MenuNode({
       return;
     }
     if (item.disabled) return;
-    if (hasChildren) {
-      toggleOpen(item.key);
+    onItemClick?.({ key: item.key });
+  };
+
+  const handleToggleClick = (event: MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    if (isDragInProgress || item.disabled || !hasChildren) {
       return;
     }
-    onItemClick?.({ key: item.key });
+    toggleOpen(item.key);
   };
 
   const dragProps = dragEnabled ? { ...attributes, ...listeners } : {};
@@ -145,7 +150,20 @@ export function MenuNode({
         {item.icon && <span className={styles.icon}>{item.icon}</span>}
         <span className={styles.label}>{item.label}</span>
         {hasChildren && (
-          <span className={cn(styles.arrow, { [styles.arrowOpen]: shouldShowChildren })}>▶</span>
+          <span
+            className={cn(styles.arrow, { [styles.arrowOpen]: shouldShowChildren })}
+            onClick={handleToggleClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleOpen(item.key);
+              }
+            }}
+          >
+            ▶
+          </span>
         )}
       </div>
       {hasChildren && (

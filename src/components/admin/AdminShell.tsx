@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation';
 import type {
   CommonSlide,
   FenceUpdatePayload,
+  GroupUpdateRequest,
   Service,
   Slide,
   SlideUpdatePayload,
 } from '@/lib/api/types';
 import { CreateEntityCard } from '@/components/admin/CreateEntityCard';
 import { FencesEditor } from '@/components/admin/FencesEditor';
+import { GroupEditor } from '@/components/admin/GroupEditor';
 import { SlideEditor } from '@/components/admin/SlideEditor';
 import { ServicesMenu } from '@/components/admin/ServicesMenu';
 import { SlidesMenu } from '@/components/admin/SlidesMenu';
@@ -20,6 +22,7 @@ import { useServiceContext } from '@/lib/state/slideDraftsContext';
 import {
   useGetFencesDetailQuery,
   useUpdateFencesByServiceIdMutation,
+  useUpdateGroupMutation,
   useUpdateSlidesByServiceIdMutation,
 } from '@/lib/store/adminApi';
 import {
@@ -27,6 +30,7 @@ import {
   compareByOrder,
   findLevelBySlideId,
 } from '@/lib/slides/order';
+import { isGroupNode } from '@/lib/slides/isGroupNode';
 import { findSlideById, flattenSlides } from '@/lib/slides/tree';
 
 const { Sider, Content } = Layout;
@@ -64,14 +68,18 @@ function AdminShellInner({
     syncActiveService,
     confirmServiceChange,
     slideDrafts,
+    groupDrafts,
     replaceSlideDraft,
+    replaceGroupDraft,
     removeSlideDraft,
+    removeGroupDraft,
     fenceDrafts,
     setFenceDrafts,
     clearAllDrafts,
   } = useServiceContext();
   const [updateSlidesByServiceId, { isLoading: isSavingSlides }] =
     useUpdateSlidesByServiceIdMutation();
+  const [updateGroup, { isLoading: isSavingGroups }] = useUpdateGroupMutation();
   const [updateFencesByServiceId, { isLoading: isSavingFences }] =
     useUpdateFencesByServiceIdMutation();
 
@@ -101,7 +109,7 @@ function AdminShellInner({
       }, {}),
     [flatSlides],
   );
-  const pendingUpdates = useMemo<SlideUpdatePayload[]>(
+  const pendingSlideUpdates = useMemo<SlideUpdatePayload[]>(
     () =>
       Object.entries(slideDrafts)
         .filter(([slideId]) => Boolean(slideMap[slideId]))
@@ -111,26 +119,49 @@ function AdminShellInner({
         ),
     [slideDrafts, slideMap],
   );
+  const pendingGroupUpdates = useMemo<GroupUpdateRequest[]>(
+    () =>
+      Object.entries(groupDrafts)
+        .filter(([slideId]) => Boolean(slideMap[slideId]) && isGroupNode(slideMap[slideId]))
+        .map(([slideId, fields]) => {
+          const sourceSlide = slideMap[slideId];
+          const groupId = sourceSlide.groupId ?? sourceSlide.id;
+          const payload: GroupUpdateRequest = { id: groupId };
+          if (typeof fields.name === 'string') {
+            payload.name = fields.name.trim();
+          }
+          if (typeof fields.order === 'number') {
+            payload.order = fields.order;
+          }
+          return payload;
+        })
+        .filter((patch) => patch.name !== undefined || patch.order !== undefined),
+    [groupDrafts, slideMap],
+  );
 
-  const hasPendingUpdates = pendingUpdates.length > 0;
+  const hasPendingSlideUpdates = pendingSlideUpdates.length > 0;
+  const hasPendingGroupUpdates = pendingGroupUpdates.length > 0;
   const pendingFences = fenceDrafts;
   const hasPendingFences = pendingFences.length > 0;
-  const hasAnyPendingUpdates = hasPendingUpdates || hasPendingFences;
-  const changedSlideIds = useMemo(() => pendingUpdates.map((item) => item.id), [pendingUpdates]);
+  const hasAnyPendingUpdates = hasPendingSlideUpdates || hasPendingGroupUpdates || hasPendingFences;
+  const changedSlideIds = useMemo(
+    () => [...pendingSlideUpdates.map((item) => item.id), ...Object.keys(groupDrafts)],
+    [groupDrafts, pendingSlideUpdates],
+  );
   const orderDrafts = useMemo(
     () =>
       Object.fromEntries(
-        Object.entries(slideDrafts)
+        [...Object.entries(slideDrafts), ...Object.entries(groupDrafts)]
           .filter(([, draft]) => typeof draft.order === 'number')
-          .map(([slideId, draft]) => [slideId, draft.order as number]),
+          .map(([slideId, draft]) => [slideId, draft.order]),
       ) as Record<string, number>,
-    [slideDrafts],
+    [groupDrafts, slideDrafts],
   );
   const effectiveSlides = useMemo(
     () => applyOrderDrafts(activeSlides, orderDrafts),
     [activeSlides, orderDrafts],
   );
-  const isSaving = isSavingSlides || isSavingFences;
+  const isSaving = isSavingSlides || isSavingGroups || isSavingFences;
 
   const handlePendingFencesChange = useCallback(
     (nextFences: FenceUpdatePayload[]) => {
@@ -149,11 +180,15 @@ function AdminShellInner({
     }
 
     try {
-      if (hasPendingUpdates) {
+      if (hasPendingSlideUpdates) {
         await updateSlidesByServiceId({
           serviceId: activeServiceId,
-          fields: pendingUpdates,
+          fields: pendingSlideUpdates,
         }).unwrap();
+      }
+
+      if (hasPendingGroupUpdates) {
+        await updateGroup(pendingGroupUpdates).unwrap();
       }
 
       if (hasPendingFences) {
@@ -179,7 +214,8 @@ function AdminShellInner({
           return;
         }
 
-        const currentDraft = slideDrafts[id] ?? {};
+        const isGroup = isGroupNode(sourceSlide);
+        const currentDraft = isGroup ? (groupDrafts[id] ?? {}) : (slideDrafts[id] ?? {});
         const nextDraft = { ...currentDraft };
         if (order === sourceSlide.order) {
           delete nextDraft.order;
@@ -188,13 +224,29 @@ function AdminShellInner({
         }
 
         if (Object.keys(nextDraft).length > 0) {
-          replaceSlideDraft(id, nextDraft);
+          if (isGroup) {
+            replaceGroupDraft(id, nextDraft);
+          } else {
+            replaceSlideDraft(id, nextDraft);
+          }
           return;
         }
-        removeSlideDraft(id);
+        if (isGroup) {
+          removeGroupDraft(id);
+        } else {
+          removeSlideDraft(id);
+        }
       });
     },
-    [removeSlideDraft, replaceSlideDraft, slideDrafts, slideMap],
+    [
+      groupDrafts,
+      removeGroupDraft,
+      removeSlideDraft,
+      replaceGroupDraft,
+      replaceSlideDraft,
+      slideDrafts,
+      slideMap,
+    ],
   );
 
   const handleSlidesReorder = useCallback(
@@ -248,7 +300,13 @@ function AdminShellInner({
       });
 
       connectedIds.forEach((id) => {
-        const currentDraft = slideDrafts[id];
+        const sourceSlide = slideMap[id];
+        if (!sourceSlide) {
+          return;
+        }
+
+        const isGroup = isGroupNode(sourceSlide);
+        const currentDraft = isGroup ? groupDrafts[id] : slideDrafts[id];
         if (!currentDraft || typeof currentDraft.order !== 'number') {
           return;
         }
@@ -256,13 +314,31 @@ function AdminShellInner({
         const nextDraft = { ...currentDraft };
         delete nextDraft.order;
         if (Object.keys(nextDraft).length > 0) {
-          replaceSlideDraft(id, nextDraft);
+          if (isGroup) {
+            replaceGroupDraft(id, nextDraft);
+          } else {
+            replaceSlideDraft(id, nextDraft);
+          }
           return;
         }
-        removeSlideDraft(id);
+        if (isGroup) {
+          removeGroupDraft(id);
+        } else {
+          removeSlideDraft(id);
+        }
       });
     },
-    [activeSlides, effectiveSlides, removeSlideDraft, replaceSlideDraft, slideDrafts],
+    [
+      activeSlides,
+      effectiveSlides,
+      groupDrafts,
+      removeGroupDraft,
+      removeSlideDraft,
+      replaceGroupDraft,
+      replaceSlideDraft,
+      slideDrafts,
+      slideMap,
+    ],
   );
 
   return (
@@ -308,7 +384,12 @@ function AdminShellInner({
             {
               key: 'slides',
               label: (
-                <Badge mode="dot" size="small" show={hasPendingUpdates} offset={[-2, -4]}>
+                <Badge
+                  mode="dot"
+                  size="small"
+                  show={hasPendingSlideUpdates || hasPendingGroupUpdates}
+                  offset={[-2, -4]}
+                >
                   <span>Слайды</span>
                 </Badge>
               ),
@@ -364,12 +445,21 @@ function AdminShellInner({
                         commonSlides={commonSlides}
                       />
                     ) : activeSlide ? (
-                      <SlideEditor
-                        slide={activeSlide}
-                        key={activeSlide.id}
-                        onResetOrderConnected={handleResetOrderConnectedComponent}
-                        onOrderInputChange={handleSlideOrderInputChange}
-                      />
+                      isGroupNode(activeSlide) ? (
+                        <GroupEditor
+                          slide={activeSlide}
+                          key={activeSlide.id}
+                          onResetOrderConnected={handleResetOrderConnectedComponent}
+                          onOrderInputChange={handleSlideOrderInputChange}
+                        />
+                      ) : (
+                        <SlideEditor
+                          slide={activeSlide}
+                          key={activeSlide.id}
+                          onResetOrderConnected={handleResetOrderConnectedComponent}
+                          onOrderInputChange={handleSlideOrderInputChange}
+                        />
+                      )
                     ) : (
                       <Empty description="Выберите слайд из списка" />
                     )}

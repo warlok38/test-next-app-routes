@@ -353,17 +353,13 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
     try {
       await createGroup(payload).unwrap();
       if (shiftedGroups.length) {
-        await Promise.all(
-          shiftedGroups.map((group) =>
-            updateGroup({
-              query: { id: group.id },
-              body: {
-                name: group.name,
-                order: group.order,
-              },
-            }).unwrap(),
-          ),
-        );
+        await updateGroup(
+          shiftedGroups.map((group) => ({
+            id: group.id,
+            name: group.name,
+            order: group.order,
+          })),
+        ).unwrap();
       }
       message.success('Группа создана');
       const resetOrder = String(groupOrderMax + 1);
@@ -511,7 +507,13 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
                       { validator: (value) => validateRequiredOrderField(value, slideOrderMax) },
                     ]}
                   >
-                    <Input type="number" min={1} max={slideOrderMax} step={1} placeholder="Например: 3" />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={slideOrderMax}
+                      step={1}
+                      placeholder="Например: 3"
+                    />
                   </Form.Item>
                   <Form.Item<CreateSlideFormValues, 'isVisible'>
                     name="isVisible"
@@ -527,10 +529,7 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
                     name="description"
                     label="Описание"
                   >
-                    <Input.TextArea
-                      placeholder="Введите описание"
-                      rows={4}
-                    />
+                    <Input.TextArea placeholder="Введите описание" rows={4} />
                   </Form.Item>
                   <Form.Item<CreateSlideFormValues, 'status'> name="status" label="Статус">
                     <Select options={STATUS_OPTIONS} />
@@ -579,7 +578,13 @@ export function CreateEntityCard({ activeServiceId, slides, commonSlides }: Crea
                       { validator: (value) => validateRequiredOrderField(value, groupOrderMax) },
                     ]}
                   >
-                    <Input type="number" min={1} max={groupOrderMax} step={1} placeholder="Например: 3" />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={groupOrderMax}
+                      step={1}
+                      placeholder="Например: 3"
+                    />
                   </Form.Item>
                 </Form>
                 <Button type="primary" onClick={handleCreateGroup} loading={isCreatingGroup}>
@@ -654,7 +659,9 @@ function compareByOrder(left: Slide, right: Slide): number {
 }
 
 function normalizeSiblingOrders(items: Slide[]): Array<{ id: string; order: number }> {
-  return [...items].sort(compareByOrder).map((slide, index) => ({ id: slide.id, order: index + 1 }));
+  return [...items]
+    .sort(compareByOrder)
+    .map((slide, index) => ({ id: slide.id, order: index + 1 }));
 }
 
 function findGroupById(items: Slide[], groupId: string): Slide | undefined {

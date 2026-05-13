@@ -5,7 +5,6 @@ import type {
   FenceUpdatePayload,
   GroupListItem,
   GroupCreateRequest,
-  GroupUpdateQuery,
   GroupUpdateRequest,
   Service,
   Slide,
@@ -173,13 +172,10 @@ export const adminApi = createApi({
       },
       invalidatesTags: ['Groups'],
     }),
-    updateGroup: builder.mutation<
-      GroupListItem,
-      { body: GroupUpdateRequest; query: GroupUpdateQuery }
-    >({
-      queryFn: async ({ body, query }) => {
+    updateGroup: builder.mutation<GroupListItem[], GroupUpdateRequest[]>({
+      queryFn: async (payload) => {
         try {
-          const data = await updateGroup({ body, query });
+          const data = await updateGroup(payload);
           return { data };
         } catch (error) {
           return {

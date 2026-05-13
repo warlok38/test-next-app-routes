@@ -84,8 +84,7 @@ export function SlideEditor({ slide, onResetOrderConnected, onOrderInputChange }
       }
 
       const draftKeys = Object.keys(baseValues) as Array<keyof SlideFormValues>;
-
-      const nextFields = draftKeys.reduce<SlideDraftPayload>((acc, field) => {
+      const nextSlideFields = draftKeys.reduce<SlideDraftPayload>((acc, field) => {
         const nextValue = allValues[field];
         const baseValue = baseValues[field];
         if (field === 'order') {
@@ -103,7 +102,7 @@ export function SlideEditor({ slide, onResetOrderConnected, onOrderInputChange }
       }, {});
 
       const hasOrderDraft = typeof slideDrafts[slide.id]?.order === 'number';
-      if (!Object.keys(nextFields).length) {
+      if (!Object.keys(nextSlideFields).length) {
         if (isOrderChanged) {
           return;
         }
@@ -114,7 +113,7 @@ export function SlideEditor({ slide, onResetOrderConnected, onOrderInputChange }
         return;
       }
 
-      setSlideDraft(slide.id, nextFields);
+      setSlideDraft(slide.id, nextSlideFields);
     },
     [
       baseValues,

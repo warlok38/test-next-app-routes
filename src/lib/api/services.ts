@@ -5,7 +5,6 @@ import type {
   FenceUpdatePayload,
   GroupListItem,
   GroupCreateRequest,
-  GroupUpdateQuery,
   GroupUpdateRequest,
   Service,
   Slide,
@@ -247,6 +246,24 @@ function visitSlides(items: Slide[], visitor: (slide: Slide) => void) {
   });
 }
 
+function applyGroupPatchToSlides(groupId: string, patch: GroupUpdateRequest) {
+  Object.values(slidesMock).forEach((serviceSlides) => {
+    visitSlides(serviceSlides, (slide) => {
+      if (slide.groupId !== groupId) {
+        return;
+      }
+      if (typeof patch.name === "string") {
+        slide.name = patch.name;
+      }
+      if (typeof patch.order === "number") {
+        slide.order = patch.order;
+      }
+      slide.isGroup = true;
+    });
+    normalizeTreeOrder(serviceSlides);
+  });
+}
+
 function findLevelByKey(items: Slide[], levelKey: string): Slide[] | undefined {
   if (levelKey === ROOT_LEVEL_KEY) {
     return items;
@@ -419,34 +436,42 @@ export async function createGroup(payload: GroupCreateRequest): Promise<GroupLis
   return { ...group };
 }
 
-export async function updateGroup(params: {
-  body: GroupUpdateRequest;
-  query: GroupUpdateQuery;
-}): Promise<GroupListItem> {
+export async function updateGroup(body: GroupUpdateRequest[]): Promise<GroupListItem[]> {
   await sleep(450);
 
   normalizeGlobalGroups();
-  const { body, query } = params;
-  const index = groupsMock.findIndex((item) => item.id === query.id);
-  if (index === -1) {
-    throw new Error(`Group with id "${query.id}" not found`);
-  }
+  body.forEach((patch) => {
+    const index = groupsMock.findIndex((item) => item.id === patch.id);
+    if (index === -1) {
+      throw new Error(`Group with id "${patch.id}" not found`);
+    }
 
-  const targetOrder = clampOrder(body.order, 1, groupsMock.length);
-  const [group] = groupsMock.splice(index, 1);
-  group.name = body.name;
-  group.order = targetOrder;
-  groupsMock.splice(targetOrder - 1, 0, group);
-  normalizeGlobalGroups();
+    if (typeof patch.order === "number") {
+      const targetOrder = clampOrder(patch.order, 1, groupsMock.length);
+      const [group] = groupsMock.splice(index, 1);
+      if (typeof patch.name === "string") {
+        group.name = patch.name;
+      }
+      group.order = targetOrder;
+      groupsMock.splice(targetOrder - 1, 0, group);
+      normalizeGlobalGroups();
+    } else if (typeof patch.name === "string") {
+      groupsMock[index].name = patch.name;
+    }
+
+    applyGroupPatchToSlides(patch.id, patch);
+  });
 
   console.log("updateGroup payload", {
     method: "PATCH",
     endpoint: "/groups",
     body,
-    query,
   });
 
-  return { ...group };
+  return body
+    .map((patch) => groupsMock.find((item) => item.id === patch.id))
+    .filter((group): group is GroupListItem => Boolean(group))
+    .map((group) => ({ ...group }));
 }
 
 export async function createSlide(payload: SlideCreateRequest): Promise<Slide> {

@@ -61,6 +61,29 @@ const normalizeSlidesOrder = (items: SlideSeed[]): Slide[] =>
       children: slide.children?.length ? normalizeSlidesOrder(slide.children) : undefined,
     }));
 
+function collectGroupSlides(items: Slide[], groups: GroupListItem[]) {
+  items.forEach((slide) => {
+    if (slide.children?.length) {
+      const groupId = slide.groupId ?? `group-${slide.id}`;
+      slide.groupId = groupId;
+      slide.isGroup = true;
+      if (!groups.some((group) => group.id === groupId)) {
+        groups.push({
+          id: groupId,
+          name: slide.name,
+          order: groups.length + 1,
+        });
+      }
+      collectGroupSlides(slide.children, groups);
+      return;
+    }
+
+    if (slide.children && slide.children.length === 0) {
+      slide.children = undefined;
+    }
+  });
+}
+
 export const servicesMock: Service[] = [
   { id: "analytics", name: "Analytics Platform" },
   { id: "billing", name: "Billing Service" },
@@ -522,5 +545,8 @@ export function normalizeGroupsOrder(items: GroupListItem[]): GroupListItem[] {
 }
 
 const groupSeeds: GroupListItem[] = [];
+Object.values(slidesMock).forEach((serviceSlides) => {
+  collectGroupSlides(serviceSlides, groupSeeds);
+});
 
 export const groupsMock: GroupListItem[] = normalizeGroupsOrder(groupSeeds);

@@ -47,12 +47,14 @@ export type GroupCreateRequest = {
 };
 
 export type GroupUpdateRequest = {
-  name: string;
-  order: number;
+  id: string;
+  name?: string;
+  order?: number;
 };
 
-export type GroupUpdateQuery = {
-  id: string;
+export type GroupDraftPayload = {
+  name?: string;
+  order?: number;
 };
 
 export type SlideCreateRequest = {

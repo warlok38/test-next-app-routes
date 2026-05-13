@@ -1,17 +1,20 @@
-"use client";
+'use client';
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
-import type { MutableRefObject } from "react";
-import type { ReactNode } from "react";
-import type { FenceUpdatePayload, SlideDraftPayload } from "@/lib/api/types";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
+import type { ReactNode } from 'react';
+import type { FenceUpdatePayload, GroupDraftPayload, SlideDraftPayload } from '@/lib/api/types';
 
 type SlideDraftMap = Record<string, SlideDraftPayload>;
+type GroupDraftMap = Record<string, GroupDraftPayload>;
 
 type ServiceContextValue = {
   activeServiceId: string | null;
   slideDrafts: SlideDraftMap;
+  groupDrafts: GroupDraftMap;
   fenceDrafts: FenceUpdatePayload[];
   hasSlideDrafts: boolean;
+  hasGroupDrafts: boolean;
   hasFenceDrafts: boolean;
   hasUnsavedChanges: boolean;
   slidesMenuOpenKeys: string[];
@@ -22,6 +25,9 @@ type ServiceContextValue = {
   setSlideDraft: (slideId: string, fields: SlideDraftPayload) => void;
   replaceSlideDraft: (slideId: string, fields: SlideDraftPayload) => void;
   removeSlideDraft: (slideId: string) => void;
+  setGroupDraft: (slideId: string, fields: GroupDraftPayload) => void;
+  replaceGroupDraft: (slideId: string, fields: GroupDraftPayload) => void;
+  removeGroupDraft: (slideId: string) => void;
   setFenceDrafts: (fields: FenceUpdatePayload[]) => void;
   clearFenceDrafts: () => void;
   clearAllDrafts: () => void;
@@ -36,13 +42,15 @@ type ServiceProviderProps = {
 export function ServiceProvider({ children }: ServiceProviderProps) {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
   const [slideDrafts, setSlideDrafts] = useState<SlideDraftMap>({});
+  const [groupDrafts, setGroupDrafts] = useState<GroupDraftMap>({});
   const [fenceDrafts, setFenceDrafts] = useState<FenceUpdatePayload[]>([]);
   const [slidesMenuOpenKeys, setSlidesMenuOpenKeys] = useState<string[]>([]);
   const lastServiceIdForSlidesMenuRef = useRef<string | undefined>(undefined);
 
   const hasSlideDrafts = useMemo(() => Object.keys(slideDrafts).length > 0, [slideDrafts]);
+  const hasGroupDrafts = useMemo(() => Object.keys(groupDrafts).length > 0, [groupDrafts]);
   const hasFenceDrafts = fenceDrafts.length > 0;
-  const hasUnsavedChanges = hasSlideDrafts || hasFenceDrafts;
+  const hasUnsavedChanges = hasSlideDrafts || hasGroupDrafts || hasFenceDrafts;
 
   const syncActiveService = useCallback((nextServiceId: string) => {
     setActiveServiceId(nextServiceId);
@@ -50,13 +58,14 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
 
   const clearAllDrafts = useCallback(() => {
     setSlideDrafts({});
+    setGroupDrafts({});
     setFenceDrafts([]);
   }, []);
 
   const confirmServiceChange = useCallback(
     (nextServiceId: string) => {
       if (activeServiceId && activeServiceId !== nextServiceId && hasUnsavedChanges) {
-        const shouldLeave = window.confirm("Вы покидаете страницу, изменения будут отменены");
+        const shouldLeave = window.confirm('Вы покидаете страницу, изменения будут отменены');
         if (!shouldLeave) {
           return false;
         }
@@ -98,14 +107,45 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
     });
   }, []);
 
+  const setGroupDraft = useCallback((slideId: string, fields: GroupDraftPayload) => {
+    setGroupDrafts((previous) => ({
+      ...previous,
+      [slideId]: {
+        ...(previous[slideId] ?? {}),
+        ...fields,
+      },
+    }));
+  }, []);
+
+  const replaceGroupDraft = useCallback((slideId: string, fields: GroupDraftPayload) => {
+    setGroupDrafts((previous) => ({
+      ...previous,
+      [slideId]: fields,
+    }));
+  }, []);
+
+  const removeGroupDraft = useCallback((slideId: string) => {
+    setGroupDrafts((previous) => {
+      if (!previous[slideId]) {
+        return previous;
+      }
+
+      const next = { ...previous };
+      delete next[slideId];
+      return next;
+    });
+  }, []);
+
   const clearFenceDrafts = useCallback(() => setFenceDrafts([]), []);
 
   const value = useMemo(
     () => ({
       activeServiceId,
       slideDrafts,
+      groupDrafts,
       fenceDrafts,
       hasSlideDrafts,
+      hasGroupDrafts,
       hasFenceDrafts,
       hasUnsavedChanges,
       slidesMenuOpenKeys,
@@ -116,6 +156,9 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       setSlideDraft,
       replaceSlideDraft,
       removeSlideDraft,
+      setGroupDraft,
+      replaceGroupDraft,
+      removeGroupDraft,
       setFenceDrafts,
       clearFenceDrafts,
       clearAllDrafts,
@@ -126,17 +169,22 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
       clearAllDrafts,
       fenceDrafts,
       hasFenceDrafts,
+      hasGroupDrafts,
       hasSlideDrafts,
       hasUnsavedChanges,
       clearFenceDrafts,
+      groupDrafts,
       slideDrafts,
+      setGroupDraft,
+      replaceGroupDraft,
+      removeGroupDraft,
       setFenceDrafts,
       setSlideDraft,
       replaceSlideDraft,
       removeSlideDraft,
       syncActiveService,
       slidesMenuOpenKeys,
-    ]
+    ],
   );
 
   return <ServiceContext.Provider value={value}>{children}</ServiceContext.Provider>;
@@ -145,7 +193,7 @@ export function ServiceProvider({ children }: ServiceProviderProps) {
 export function useServiceContext() {
   const context = useContext(ServiceContext);
   if (!context) {
-    throw new Error("useServiceContext must be used inside ServiceProvider");
+    throw new Error('useServiceContext must be used inside ServiceProvider');
   }
 
   return context;
